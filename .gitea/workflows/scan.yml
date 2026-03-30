@@ -46,7 +46,7 @@ jobs:
         run: sh scripts/ci/setup-gosec.sh "${{ env.CI_GOSEC_VERSION }}"
 
       - name: Gosec
-        run: gosec ./...
+        run: gosec -exclude-dir=.modcache ./...
 
       - name: Install govulncheck
         run: sh scripts/ci/setup-govulncheck.sh "${{ env.CI_GOVULNCHECK_VERSION }}"
