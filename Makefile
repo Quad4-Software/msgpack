@@ -1,6 +1,11 @@
+.PHONY: test bench
+
 test:
-	go test ./...
+	go test ./... -count=1
+	go vet ./...
 	go test ./... -short -race
 	go test ./... -run=NONE -bench=. -benchmem
 	env GOOS=linux GOARCH=386 go test ./...
-	go vet
+
+bench:
+	go test ./... -run=NONE -bench=. -benchmem

@@ -1,3 +1,36 @@
+## [5.5.0](https://git.quad4.io/Go-Libs/msgpack) (2026-03-30)
+
+Quad4 fork: maintenance release (module path and repository layout). Upstream lineage remains [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) v5.4.1.
+
+### Module and imports
+
+- Module path is now `git.quad4.io/Go-Libs/msgpack/v5` (major `/v5` unchanged for Go compatibility).
+- Import the API as `git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack`; wire codes as `.../pkg/msgpack/msgpcode`.
+- `extra/msgpappengine` module: `git.quad4.io/Go-Libs/msgpack/extra/msgpappengine`, with `replace` to the root module for local builds.
+
+### Toolchain and dependencies
+
+- Go **1.25.8**; `go.work` includes the root module and `extra/msgpappengine`.
+- `github.com/stretchr/testify` **v1.11.1**; `gopkg.in/yaml.v3` **v3.0.1** (transitive); `google.golang.org/appengine` **v1.6.8** in the App Engine extra module.
+
+### Layout and repository
+
+- Library sources moved from repository root to **`pkg/msgpack/`**; **`pkg/msgpack/msgpcode/`** holds opcode definitions.
+- Added **`.gitea/workflows`** (`ci.yml`, `scan.yml`) and **`scripts/ci/`** (setup-go, gosec, govulncheck, trivy, test-all, scan-all, checkout) aligned with other Quad4 Go libraries.
+- Removed legacy **`.github/`**, **`.travis.yml`**, **commitlint** / **npm** config files.
+- **`Makefile`** runs `go vet ./...` and tests against `./...`.
+- **`.gitignore`**: local `GOMODCACHE` / `GOCACHE` / `GOTMPDIR` cache dirs when building on constrained disks.
+
+### Documentation and legal
+
+- **`README.md`**: fork notice, Quad4 maintenance, install/import paths, layout table.
+- **`LICENSE`**: retained upstream copyright; added Quad4 fork line.
+- **`pkg/msgpack/doc.go`**: package overview for pkg.go.dev.
+
+### Code
+
+- Ran **`go fix ./...`** to apply available automated modernizations.
+
 ## [5.4.1](https://github.com/vmihailenco/msgpack/compare/v5.4.0...v5.4.1) (2023-10-26)
 
 

@@ -1,10 +1,16 @@
-module github.com/vmihailenco/msgpack/extra/appengine
+module git.quad4.io/Go-Libs/msgpack/extra/msgpappengine
 
-go 1.15
+go 1.25.8
 
-replace github.com/vmihailenco/msgpack/v5 => ../..
+replace git.quad4.io/Go-Libs/msgpack/v5 => ../..
 
 require (
-	github.com/vmihailenco/msgpack/v5 v5.4.1
-	google.golang.org/appengine v1.6.7
+	git.quad4.io/Go-Libs/msgpack/v5 v5.5.0
+	google.golang.org/appengine v1.6.8
+)
+
+require (
+	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+	google.golang.org/protobuf v1.26.0 // indirect
 )
