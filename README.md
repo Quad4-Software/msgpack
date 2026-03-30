@@ -36,6 +36,10 @@ Upstream documentation and background: [msgpack.uptrace.dev](https://msgpack.upt
 | `scripts/ci` | Local CI parity with Gitea (`test-all.sh`, `scan-all.sh`, `setup-go.sh`, …) |
 | `.gitea/workflows` | CI (`ci.yml`) and security scan (`scan.yml`) |
 
+## Testing
+
+- **Property-based tests** use [pbt](https://git.quad4.io/Go-Libs/pbt) (`git.quad4.io/Go-Libs/pbt/pkg/pbt`) in `pbt_test.go` (roundtrip properties for `[]byte`, `string`, and `map[string]int`).
+
 ## License
 
 BSD 2-clause; see [LICENSE](LICENSE). Original copyright remains with the vmihailenco authors; fork maintenance is attributed in this README.
