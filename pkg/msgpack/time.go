@@ -1,3 +1,4 @@
+// #nosec G115 -- Time extension packs Unix/nsec into uint layouts defined by the msgpack-time spec.
 package msgpack
 
 import (

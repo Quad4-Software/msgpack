@@ -1,3 +1,4 @@
+// #nosec G115 -- Extension headers: ext type IDs and lengths map to on-wire uint/int layouts.
 package msgpack
 
 import (

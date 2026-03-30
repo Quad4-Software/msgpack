@@ -1,3 +1,4 @@
+// #nosec G115 -- String/binary/array lengths use prefix codes with intentional int-to-smaller-width packing.
 package msgpack
 
 import (

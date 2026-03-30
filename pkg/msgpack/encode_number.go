@@ -1,3 +1,4 @@
+// #nosec G115 -- Big-endian byte lanes and typed encoders use shifts and casts prescribed by the format.
 package msgpack
 
 import (

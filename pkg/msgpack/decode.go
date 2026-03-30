@@ -1,3 +1,4 @@
+// #nosec G115 -- MessagePack wire format: fixed-point tags, int8 fixed nums, and byte-to-int8 reinterpretation per spec.
 package msgpack
 
 import (

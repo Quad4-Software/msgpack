@@ -1,3 +1,4 @@
+// #nosec G115 -- Narrowing from wider decoded integers to requested Go types is defined MessagePack behavior.
 package msgpack
 
 import (

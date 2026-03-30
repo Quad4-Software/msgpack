@@ -1,3 +1,4 @@
+// #nosec G115 -- Map length headers pack int lengths into fixed-width types and small fixed-prefix codes.
 package msgpack
 
 import (

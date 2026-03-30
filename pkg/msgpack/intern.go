@@ -1,3 +1,4 @@
+// #nosec G115 -- Intern table indices are bounded by branch before write; casts tag ext header bytes.
 package msgpack
 
 import (
