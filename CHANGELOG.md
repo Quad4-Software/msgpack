@@ -10,9 +10,9 @@ Quad4 fork: maintenance release (module path and repository layout). Upstream li
 
 ### Toolchain and dependencies
 
-- Go **1.25.8**; `go.work` includes the root module and `extra/msgpappengine`.
+- Go **1.26.2**; `go.work` includes the root module and `extra/msgpappengine`.
 - `git.quad4.io/Go-Libs/pbt` for property-based tests (test-only).
-- `github.com/stretchr/testify` **v1.11.1** (test-only: `require` / `suite`); `gopkg.in/yaml.v3` **v3.0.1** (transitive); `google.golang.org/appengine` **v1.6.8** in the App Engine extra module.
+- `github.com/stretchr/testify` **v1.11.1** (test-only: `require` / `suite`); `gopkg.in/yaml.v3` **v3.0.1** (transitive); `google.golang.org/appengine` **v1.6.8** in the App Engine extra module; `github.com/golang/protobuf` **v1.5.4** and `google.golang.org/protobuf` **v1.36.11** (transitive via App Engine).
 
 ### Layout and repository
 
