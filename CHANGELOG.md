@@ -1,4 +1,4 @@
-## [5.5.0](https://git.quad4.io/Go-Libs/msgpack) (2026-03-30)
+## [5.5.0](https://git.quad4.io/Go-Libs/msgpack) (2026-04-18)
 
 Quad4 fork: maintenance release (module path and repository layout). Upstream lineage remains [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) v5.4.1.
 
