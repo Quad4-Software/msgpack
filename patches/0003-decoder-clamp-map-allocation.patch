@@ -1,0 +1,60 @@
+Subject: [PATCH 3/7] decoder: clamp map allocation against forged map length
+
+Decoder.DecodeMap and Decoder.DecodeUntypedMap called
+
+    make(map[K]V, n)
+
+with n taken directly from the wire-format map16 / map32 length. A
+hostile map32 header (for example, 0xdf 0xff 0xff 0xff 0xff) caused
+the runtime to allocate a multi-gigabyte hashtable up front before
+the underlying short input failed, which is a reliable single-packet
+OOM.
+
+This patch clamps the initial sizing hint to maxMapSize unless the
+caller has explicitly opted out via Decoder.DisableAllocLimit(true).
+The map continues to grow naturally as real entries arrive.
+
+Backwards compatible: same exported API, same wire format, same
+semantics for well-formed input.
+
+Apply from the package root:
+
+    patch -p1 < 0003-decoder-clamp-map-allocation.patch
+
+---
+ decode_map.go | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+--- a/decode_map.go
++++ b/decode_map.go
+@@ -157,7 +157,14 @@
+ 		return nil, nil
+ 	}
+ 
+-	m := make(map[string]interface{}, n)
++	// Clamp the initial map sizing hint so a forged map32 length cannot
++	// trigger a multi-gigabyte hashtable allocation up front. Real
++	// entries still grow the map as input arrives.
++	hint := n
++	if d.flags&disableAllocLimitFlag == 0 && hint > maxMapSize {
++		hint = maxMapSize
++	}
++	m := make(map[string]interface{}, hint)
+ 
+ 	for i := 0; i < n; i++ {
+ 		mk, err := d.DecodeString()
+@@ -184,7 +191,13 @@
+ 		return nil, nil
+ 	}
+ 
+-	m := make(map[interface{}]interface{}, n)
++	// See DecodeMap(): clamp the initial sizing hint to defeat a forged
++	// map32 length.
++	hint := n
++	if d.flags&disableAllocLimitFlag == 0 && hint > maxMapSize {
++		hint = maxMapSize
++	}
++	m := make(map[interface{}]interface{}, hint)
+ 
+ 	for i := 0; i < n; i++ {
+ 		mk, err := d.decodeInterfaceCond()

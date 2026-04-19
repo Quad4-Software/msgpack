@@ -1,0 +1,64 @@
+Subject: [PATCH 7/7] decoder: pool bytes.Reader in Unmarshal hot path
+
+Unmarshal already pools the *Decoder via decPool, but it allocated a
+fresh bytes.Reader on every call:
+
+    dec.Reset(bytes.NewReader(data))
+
+bytes.Reader is a small struct, but for high-rate decoders (RPC
+handlers, stream loops, log ingest) the per-call alloc shows up in
+escape analysis and in allocs-per-op benchmarks.
+
+This patch adds a sync.Pool of *bytes.Reader, resets the pooled
+reader to point at the caller's data immediately before decoding, and
+resets it back to nil before returning it to the pool. The reader
+does not pin caller buffers between calls.
+
+No exported API change. Decoder semantics are unchanged because each
+Decoder still has exclusive access to the reader for the duration of
+the call.
+
+Apply from the package root:
+
+    patch -p1 < 0007-decoder-pool-bytes-reader-in-unmarshal.patch
+
+---
+ decode.go | 22 +++++++++++++++++++---
+ 1 file changed, 19 insertions(+), 3 deletions(-)
+
+--- a/decode.go
++++ b/decode.go
+@@ -39,6 +39,16 @@
+ 	},
+ }
+ 
++// readerPool reuses bytes.Reader instances backing Unmarshal so the
++// decoder no longer allocates one on every call. The reader is reset
++// to point at the caller's data immediately before decoding and reset
++// to nil after, so it does not pin caller buffers between calls.
++var readerPool = sync.Pool{
++	New: func() interface{} {
++		return new(bytes.Reader)
++	},
++}
++
+ func GetDecoder() *Decoder {
+ 	return decPool.Get().(*Decoder)
+ }
+@@ -56,9 +66,15 @@
+ func Unmarshal(data []byte, v interface{}) error {
+ 	dec := GetDecoder()
+ 	dec.UsePreallocateValues(true)
+-	dec.Reset(bytes.NewReader(data))
++
++	r := readerPool.Get().(*bytes.Reader)
++	r.Reset(data)
++	dec.Reset(r)
++
+ 	err := dec.Decode(v)
+ 
++	r.Reset(nil)
++	readerPool.Put(r)
+ 	PutDecoder(dec)
+ 
+ 	return err

@@ -1,0 +1,68 @@
+Subject: [PATCH 2/7] decoder: clamp []byte / string allocation against forged length
+
+Decoder.bytes (used for decoding []byte) and Decoder.bytesPtr (used
+for *[]byte and the string fast path that takes ownership of the
+underlying buffer) called
+
+    readN(d.r, b, n)
+
+with n taken directly from the wire-format bin8/16/32 or
+str8/16/32 length. readN allocates the entire n-byte slice up front
+before reading. A hostile bin32/str32 header (for example,
+0xc6 0xff 0xff 0xff 0xff followed by zero or a few bytes) was enough
+to make the decoder request roughly 4 GiB before the short input
+failed, which is a reliable single-packet OOM against any service
+that unmarshals untrusted MessagePack.
+
+The decoder already has a growth-capped reader (readNGrow) that
+allocates in bytesAllocLimit-sized chunks as actual bytes arrive.
+This patch routes both bytes and bytesPtr through readNGrow unless
+the caller has explicitly opted out via Decoder.DisableAllocLimit(true).
+
+Backwards compatible: same exported API, same wire format. Output
+bytes/strings are byte-for-byte identical for well-formed input.
+
+Apply from the package root:
+
+    patch -p1 < 0002-decoder-clamp-bytes-and-string-allocation.patch
+
+---
+ decode_string.go | 18 +++++++++++++++++-
+ 1 file changed, 17 insertions(+), 1 deletion(-)
+
+--- a/decode_string.go
++++ b/decode_string.go
+@@ -92,7 +92,16 @@
+ 	if n == -1 {
+ 		return nil, nil
+ 	}
+-	return readN(d.r, b, n)
++	// Use the growth-capped reader unless limits have been explicitly
++	// disabled. Without the cap, a hostile bin32 / str32 length (for
++	// example, 0xc6 0xff 0xff 0xff 0xff) tricks the decoder into
++	// allocating a multi-gigabyte slice up front before the underlying
++	// short input fails. With the cap, allocation grows in
++	// bytesAllocLimit-sized chunks only as actual bytes arrive.
++	if d.flags&disableAllocLimitFlag != 0 {
++		return readN(d.r, b, n)
++	}
++	return readNGrow(d.r, b, n)
+ }
+ 
+ func (d *Decoder) decodeStringTemp() (string, error) {
+@@ -139,7 +148,14 @@
+ 		return nil
+ 	}
+ 
+-	*ptr, err = readN(d.r, *ptr, n)
++	// See bytes(): route through the growth-capped reader unless limits
++	// have been explicitly disabled, so a forged bin32 / str32 length
++	// cannot trigger a multi-gigabyte up-front allocation.
++	if d.flags&disableAllocLimitFlag != 0 {
++		*ptr, err = readN(d.r, *ptr, n)
++	} else {
++		*ptr, err = readNGrow(d.r, *ptr, n)
++	}
+ 	return err
+ }
+ 

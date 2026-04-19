@@ -1,0 +1,98 @@
+Subject: [PATCH 5/7] decoder: replace preallocator goroutine leak with sync.Pool
+
+The UsePreallocateValues fast path used a per-type buffered channel
+producer:
+
+    ch = make(chan reflect.Value, 256)
+    go func() {
+        for {
+            ch <- reflect.New(t)
+        }
+    }()
+    cachedValues.m[t] = ch
+
+The goroutine ran forever and was never reaped, so the goroutine
+count and resident set grew monotonically with the number of distinct
+Go types ever decoded. Long-running services that decoded many
+generated or reflective types (for example, a server that decoded
+into one struct per RPC) leaked one goroutine and a 256-slot channel
+of *reflect.Value per type, indefinitely. Lookup also went through a
+global RWMutex on every call.
+
+This patch replaces the structure with a sync.Map of *sync.Pool. The
+pool's New func is reflect.New(t), so allocation behavior under load
+is the same (per-P caching of preallocated values) but:
+
+  * No background goroutine is created, ever.
+  * Idle entries are reclaimable by the GC during quiescent periods.
+  * The lookup hot path no longer takes a global RWMutex.
+
+The exported API and behavior of UsePreallocateValues are unchanged.
+
+Backwards compatible: same exported API, same observable behavior.
+
+Apply from the package root:
+
+    patch -p1 < 0005-decoder-fix-preallocator-goroutine-leak.patch
+
+---
+ decode_typgen.go | 41 +++++++++++++++++++++++++----------------
+ 1 file changed, 25 insertions(+), 16 deletions(-)
+
+--- a/decode_typgen.go
++++ b/decode_typgen.go
+@@ -5,36 +5,27 @@
+ 	"sync"
+ )
+ 
+-var cachedValues struct {
+-	m map[reflect.Type]chan reflect.Value
+-	sync.RWMutex
+-}
++// valuePools maps reflect.Type to a *sync.Pool that lazily produces
++// reflect.New(t) instances. The previous implementation spawned one
++// goroutine per distinct type that filled a buffered channel with
++// preallocated values forever; those goroutines were never reaped, so
++// the goroutine count and resident set grew monotonically with the
++// number of distinct Go types ever decoded. sync.Pool gives the same
++// amortized allocation pattern (per-P caching) while letting the GC
++// drain entries during quiescent periods, removes the global RWMutex
++// from the lookup path, and removes the leak.
++var valuePools sync.Map
+ 
+ func cachedValue(t reflect.Type) reflect.Value {
+-	cachedValues.RLock()
+-	ch := cachedValues.m[t]
+-	cachedValues.RUnlock()
+-	if ch != nil {
+-		return <-ch
+-	}
+-
+-	cachedValues.Lock()
+-	defer cachedValues.Unlock()
+-	if ch = cachedValues.m[t]; ch != nil {
+-		return <-ch
+-	}
+-
+-	ch = make(chan reflect.Value, 256)
+-	go func() {
+-		for {
+-			ch <- reflect.New(t)
+-		}
+-	}()
+-	if cachedValues.m == nil {
+-		cachedValues.m = make(map[reflect.Type]chan reflect.Value, 8)
++	if p, ok := valuePools.Load(t); ok {
++		return p.(*sync.Pool).Get().(reflect.Value)
+ 	}
+-	cachedValues.m[t] = ch
+-	return <-ch
++	p, _ := valuePools.LoadOrStore(t, &sync.Pool{
++		New: func() interface{} {
++			return reflect.New(t)
++		},
++	})
++	return p.(*sync.Pool).Get().(reflect.Value)
+ }
+ 
+ func (d *Decoder) newValue(t reflect.Type) reflect.Value {
