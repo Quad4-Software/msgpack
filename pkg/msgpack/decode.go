@@ -40,6 +40,16 @@ var decPool = sync.Pool{
 	},
 }
 
+// readerPool reuses *bytes.Reader instances created by Unmarshal so each
+// call avoids one heap allocation for the wrapper. The reader is reset to
+// the empty slice before being returned to the pool so it does not retain
+// a reference to the caller's data.
+var readerPool = sync.Pool{
+	New: func() interface{} {
+		return bytes.NewReader(nil)
+	},
+}
+
 func GetDecoder() *Decoder {
 	return decPool.Get().(*Decoder)
 }
@@ -57,10 +67,16 @@ func PutDecoder(dec *Decoder) {
 func Unmarshal(data []byte, v interface{}) error {
 	dec := GetDecoder()
 	dec.UsePreallocateValues(true)
-	dec.Reset(bytes.NewReader(data))
+
+	r := readerPool.Get().(*bytes.Reader)
+	r.Reset(data)
+	dec.Reset(r)
+
 	err := dec.Decode(v)
 
 	PutDecoder(dec)
+	r.Reset(nil)
+	readerPool.Put(r)
 
 	return err
 }

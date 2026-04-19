@@ -24,18 +24,23 @@ type writer interface {
 	WriteByte(byte) error
 }
 
+// byteWriter adapts an io.Writer that does not implement io.ByteWriter.
+//
+// The single-byte buffer is kept on the wrapper so WriteByte does not
+// allocate a fresh one-byte slice on every call. Wrappers are created
+// per Encoder.Reset, so there is no concurrency concern.
 type byteWriter struct {
 	io.Writer
+	scratch [1]byte
 }
 
-func newByteWriter(w io.Writer) byteWriter {
-	return byteWriter{
-		Writer: w,
-	}
+func newByteWriter(w io.Writer) *byteWriter {
+	return &byteWriter{Writer: w}
 }
 
-func (bw byteWriter) WriteByte(c byte) error {
-	_, err := bw.Write([]byte{c})
+func (bw *byteWriter) WriteByte(c byte) error {
+	bw.scratch[0] = c
+	_, err := bw.Write(bw.scratch[:])
 	return err
 }
 
@@ -56,11 +61,19 @@ func PutEncoder(enc *Encoder) {
 	encPool.Put(enc)
 }
 
+// marshalInitialBufSize is the initial backing capacity reserved by Marshal.
+//
+// Pre-growing avoids the first one or two doublings (8/16/32/64) for the
+// majority of small payloads (numbers, short strings, small structs) without
+// over-allocating for callers that encode large values.
+const marshalInitialBufSize = 64
+
 // Marshal returns the MessagePack encoding of v.
 func Marshal(v interface{}) ([]byte, error) {
 	enc := GetEncoder()
 
 	var buf bytes.Buffer
+	buf.Grow(marshalInitialBufSize)
 	enc.Reset(&buf)
 
 	err := enc.Encode(v)
