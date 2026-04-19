@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"sync"
 
-	"github.com/vmihailenco/tagparser/v2"
+	"git.quad4.io/Go-Libs/tagparser/v2/pkg/tagparser"
 )
 
 var errorType = reflect.TypeOf((*error)(nil)).Elem()

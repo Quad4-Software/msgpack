@@ -364,6 +364,85 @@ func BenchmarkStructUnmarshalPartially(b *testing.B) {
 	}
 }
 
+// BenchmarkMarshalParallel exercises the package-level encoder pool from
+// many goroutines. It shows the per-call cost when the pool is hot.
+func BenchmarkMarshalParallel(b *testing.B) {
+	src := structForBenchmark()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if _, err := msgpack.Marshal(src); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// BenchmarkUnmarshalParallel exercises the package-level decoder pool and
+// the pooled bytes.Reader from many goroutines.
+func BenchmarkUnmarshalParallel(b *testing.B) {
+	src := structForBenchmark()
+	data, err := msgpack.Marshal(src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var out benchmarkStruct
+		for pb.Next() {
+			if err := msgpack.Unmarshal(data, &out); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// BenchmarkLargeByteSlice round-trips a 64 KiB byte slice. The cost is
+// dominated by the bin32 length prefix path and the destination allocation.
+func BenchmarkLargeByteSlice(b *testing.B) {
+	src := make([]byte, 1<<16)
+	for i := range src {
+		src[i] = byte(i)
+	}
+	var dst []byte
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+// BenchmarkLargeString round-trips a 64 KiB string through the str32 path.
+func BenchmarkLargeString(b *testing.B) {
+	buf := make([]byte, 1<<16)
+	for i := range buf {
+		buf[i] = byte('a' + (i % 26))
+	}
+	src := string(buf)
+	var dst string
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+// BenchmarkNestedMap measures the recursive map encoder and decoder on a
+// 5-level deep structure of map[string]any values.
+func BenchmarkNestedMap(b *testing.B) {
+	var leaf any = "leaf"
+	for i := 0; i < 5; i++ {
+		leaf = map[string]any{"k": leaf}
+	}
+	src := leaf.(map[string]any)
+	var dst map[string]any
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+// BenchmarkStructMarshalReuse measures Marshal-only cost for a typical
+// struct using the package-level encoder pool.
+func BenchmarkStructMarshalReuse(b *testing.B) {
+	src := structForBenchmark()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := msgpack.Marshal(src); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkQuery(b *testing.B) {
 	var records []map[string]any
 	for i := range 1000 {

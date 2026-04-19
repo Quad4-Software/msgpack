@@ -92,7 +92,10 @@ func (d *Decoder) bytes(c byte, b []byte) ([]byte, error) {
 	if n == -1 {
 		return nil, nil
 	}
-	return readN(d.r, b, n)
+	if d.flags&disableAllocLimitFlag != 0 {
+		return readN(d.r, b, n)
+	}
+	return readNGrow(d.r, b, n)
 }
 
 func (d *Decoder) decodeStringTemp() (string, error) {
@@ -139,7 +142,17 @@ func (d *Decoder) bytesPtr(c byte, ptr *[]byte) error {
 		return nil
 	}
 
-	*ptr, err = readN(d.r, *ptr, n)
+	// Use the growth-capped reader unless limits have been explicitly
+	// disabled. Without the cap, a hostile bin32 length (for example,
+	// 0xc6 0xff 0xff 0xff 0xff) tricks the decoder into allocating a
+	// multi-gigabyte slice up front before the underlying short input
+	// fails. With the cap, allocation grows in bytesAllocLimit-sized
+	// chunks only as actual bytes arrive.
+	if d.flags&disableAllocLimitFlag != 0 {
+		*ptr, err = readN(d.r, *ptr, n)
+	} else {
+		*ptr, err = readNGrow(d.r, *ptr, n)
+	}
 	return err
 }
 

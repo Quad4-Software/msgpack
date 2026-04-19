@@ -105,3 +105,86 @@ func TestPBTRoundtripMapStringInt(t *testing.T) {
 	)
 	pbt.Check(t, prop, pbt.WithRuns(150), pbt.WithSeed(44))
 }
+
+func TestPBTRoundtripIntSlice(t *testing.T) {
+	gen := pbt.SliceOf(pbt.IntRange(-1<<30, 1<<30), 0, 256)
+	prop := pbt.ForAll(
+		"Marshal then Unmarshal []int roundtrip",
+		gen,
+		func(xs []int) bool {
+			b, err := msgpack.Marshal(xs)
+			if err != nil {
+				return false
+			}
+			var out []int
+			if err := msgpack.Unmarshal(b, &out); err != nil {
+				return false
+			}
+			if len(xs) == 0 && len(out) == 0 {
+				return true
+			}
+			return reflect.DeepEqual(out, xs)
+		},
+		pbt.WithShrinker[[]int](pbt.SliceShrinker[int]()),
+	)
+	pbt.Check(t, prop, pbt.WithRuns(150), pbt.WithSeed(45))
+}
+
+func TestPBTRoundtripStringSlice(t *testing.T) {
+	gen := pbt.SliceOf(pbt.StringASCII(0, 16), 0, 64)
+	prop := pbt.ForAll(
+		"Marshal then Unmarshal []string roundtrip",
+		gen,
+		func(xs []string) bool {
+			b, err := msgpack.Marshal(xs)
+			if err != nil {
+				return false
+			}
+			var out []string
+			if err := msgpack.Unmarshal(b, &out); err != nil {
+				return false
+			}
+			if len(xs) == 0 && len(out) == 0 {
+				return true
+			}
+			return reflect.DeepEqual(out, xs)
+		},
+		pbt.WithShrinker[[]string](pbt.SliceShrinker[string]()),
+	)
+	pbt.Check(t, prop, pbt.WithRuns(150), pbt.WithSeed(46))
+}
+
+func pairsToStrMap(pairs []pbt.Tuple2Value[string, string]) map[string]string {
+	m := make(map[string]string, len(pairs))
+	for _, p := range pairs {
+		m[p.First] = p.Second
+	}
+	return m
+}
+
+func TestPBTRoundtripMapStringString(t *testing.T) {
+	pairGen := pbt.Tuple2("kv",
+		pbt.StringASCII(1, 16),
+		pbt.StringASCII(0, 32),
+	)
+	gen := pbt.Map("map[string]string",
+		pbt.SliceOf(pairGen, 0, 64),
+		pairsToStrMap,
+	)
+	prop := pbt.ForAll(
+		"Marshal then Unmarshal map[string]string roundtrip",
+		gen,
+		func(m map[string]string) bool {
+			b, err := msgpack.Marshal(m)
+			if err != nil {
+				return false
+			}
+			var out map[string]string
+			if err := msgpack.Unmarshal(b, &out); err != nil {
+				return false
+			}
+			return reflect.DeepEqual(m, out)
+		},
+	)
+	pbt.Check(t, prop, pbt.WithRuns(150), pbt.WithSeed(47))
+}

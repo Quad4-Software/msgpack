@@ -116,6 +116,20 @@ func (d *Decoder) uint(c byte) (uint64, error) {
 		return uint64(n), err
 	case msgpcode.Uint64, msgpcode.Int64:
 		return d.uint64()
+	case msgpcode.Float, msgpcode.Double:
+		// Accept floats produced by pipelines that lose the integer /
+		// float distinction. Conversion succeeds only when the value is
+		// finite, integer-valued, and fits in uint64; anything else is
+		// rejected so meaningful data cannot be silently truncated.
+		f, err := d.float64(c)
+		if err != nil {
+			return 0, err
+		}
+		if math.IsNaN(f) || math.IsInf(f, 0) || f != math.Trunc(f) ||
+			f < 0 || f > math.MaxUint64 {
+			return 0, fmt.Errorf("msgpack: float %v cannot be represented as uint64", f)
+		}
+		return uint64(f), nil
 	}
 	return 0, fmt.Errorf("msgpack: invalid code=%x decoding uint64", c)
 }
@@ -159,6 +173,18 @@ func (d *Decoder) int(c byte) (int64, error) {
 	case msgpcode.Uint64, msgpcode.Int64:
 		n, err := d.uint64()
 		return int64(n), err
+	case msgpcode.Float, msgpcode.Double:
+		// See uint(). Conversion succeeds only when the value is finite,
+		// integer-valued, and fits in int64.
+		f, err := d.float64(c)
+		if err != nil {
+			return 0, err
+		}
+		if math.IsNaN(f) || math.IsInf(f, 0) || f != math.Trunc(f) ||
+			f < math.MinInt64 || f > math.MaxInt64 {
+			return 0, fmt.Errorf("msgpack: float %v cannot be represented as int64", f)
+		}
+		return int64(f), nil
 	}
 	return 0, fmt.Errorf("msgpack: invalid code=%x decoding int64", c)
 }
