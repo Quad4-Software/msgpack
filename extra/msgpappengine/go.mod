@@ -10,7 +10,7 @@ require (
 )
 
 require (
+	git.quad4.io/Go-Libs/tagparser/v2 v2.1.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
-	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
