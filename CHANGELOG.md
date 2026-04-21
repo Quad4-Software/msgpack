@@ -1,3 +1,16 @@
+## [5.6.1](https://git.quad4.io/Go-Libs/msgpack) (2026-04-21)
+
+### Dependencies
+
+- Removed **`github.com/stretchr/testify`** from the root module; tests now use the standard **`testing`** package only. Transitive test dependencies dropped from the main `go.sum` include **`github.com/davecgh/go-spew`**, **`github.com/pmezard/go-difflib`**, and **`gopkg.in/yaml.v3`**.
+
+### Tests
+
+- Added **`pkg/msgpack/testing_helpers_test.go`**: small **`t.Helper()`** helpers (`mustOK`, `mustErr`, `mustErrorString`, **`mustEqual`** for comparable types, **`mustDeepEqual`**, **`mustBytesEqual`**, **`mustTrue`**) so failures report the calling test line and repetitive error checks stay readable.
+- **`pkg/msgpack/msgpack_test.go`**: encoder/decoder harness gains **`mustEncode`** / **`mustDecode`**; **`t.Run`** subtests for time round-trip, string maps, custom coders (**`TestCustomCoderRoundTrip`**), and omit-empty behaviour; table-driven **`TestMapStringString`** (formerly a single loop); clearer assertions for embedding, sorted-map stability, and unsupported map keys.
+- **`pkg/msgpack/intern_test.go`**, **`pkg/msgpack/ext_test.go`**: switched to the shared helpers; **`TestResetDict`** split into named subtests.
+- **`pkg/msgpack/types_test.go`**: **`TestEncoder`** and **`TestStringsBin`** use **`t.Run`** per case and the shared helpers where appropriate.
+
 ## [5.6.0](https://git.quad4.io/Go-Libs/msgpack) (2026-04-19)
 
 ### Dependencies
@@ -68,7 +81,7 @@ Quad4 fork: maintenance release (module path and repository layout). Upstream li
 - Go **1.26.2**; `go.work` includes the root module and `extra/msgpappengine`.
 - `git.quad4.io/Go-Libs/pbt` for property-based tests (test-only).
 - `github.com/vmihailenco/tagparser/v2` **v2.0.0** for struct tag parsing (`pkg/msgpack/types.go`).
-- `github.com/stretchr/testify` **v1.11.1** (test-only: `require` / `suite`); `gopkg.in/yaml.v3` **v3.0.1** (transitive); `google.golang.org/appengine` **v1.6.8** in the App Engine extra module; `github.com/golang/protobuf` **v1.5.4** and `google.golang.org/protobuf` **v1.36.11** (transitive via App Engine).
+- `google.golang.org/appengine` **v1.6.8** in the App Engine extra module; `github.com/golang/protobuf` **v1.5.4** and `google.golang.org/protobuf` **v1.36.11** (transitive via App Engine).
 
 ### Layout and repository
 
