@@ -14,7 +14,6 @@ import (
 
 	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
 	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack/msgpcode"
-	"github.com/stretchr/testify/require"
 )
 
 //------------------------------------------------------------------------------
@@ -297,13 +296,14 @@ func TestEncoder(t *testing.T) {
 	enc.UseCompactInts(true)
 
 	for i, test := range encoderTests {
-		buf.Reset()
-
-		err := enc.Encode(test.in)
-		require.Nil(t, err)
-
-		s := hex.EncodeToString(buf.Bytes())
-		require.Equal(t, test.wanted, s, "#%d", i)
+		t.Run(fmt.Sprintf("case_%03d", i), func(t *testing.T) {
+			buf.Reset()
+			mustOK(t, enc.Encode(test.in))
+			s := hex.EncodeToString(buf.Bytes())
+			if s != test.wanted {
+				t.Fatalf("got %s, want %s", s, test.wanted)
+			}
+		})
 	}
 }
 
@@ -687,7 +687,7 @@ func TestTypes(t *testing.T) {
 		if wanted == nil {
 			wanted = indirect(test.in)
 		}
-		require.Equal(t, wanted, out)
+		mustDeepEqual(t, out, wanted)
 	}
 
 	for _, test := range typeTests {
@@ -757,30 +757,32 @@ func TestStringsBin(t *testing.T) {
 		},
 	}
 
-	for _, test := range tests {
-		b, err := msgpack.Marshal(test.in)
-		require.Nil(t, err)
-		s := hex.EncodeToString(b)
-		require.Equal(t, s, test.wanted)
+	for i, test := range tests {
+		t.Run(fmt.Sprintf("case_%03d", i), func(t *testing.T) {
+			b, err := msgpack.Marshal(test.in)
+			mustOK(t, err)
+			s := hex.EncodeToString(b)
+			if s != test.wanted {
+				t.Fatalf("got %s, want %s", s, test.wanted)
+			}
 
-		var out string
-		err = msgpack.Unmarshal(b, &out)
-		require.Nil(t, err)
-		require.Equal(t, out, test.in)
+			var out string
+			mustOK(t, msgpack.Unmarshal(b, &out))
+			mustEqual(t, out, test.in)
 
-		var msg msgpack.RawMessage
-		err = msgpack.Unmarshal(b, &msg)
-		require.Nil(t, err)
-		require.Equal(t, []byte(msg), b)
+			var msg msgpack.RawMessage
+			mustOK(t, msgpack.Unmarshal(b, &msg))
+			mustBytesEqual(t, []byte(msg), b)
 
-		dec := msgpack.NewDecoder(bytes.NewReader(b))
-		v, err := dec.DecodeInterface()
-		require.Nil(t, err)
-		require.Equal(t, v.(string), test.in)
+			dec := msgpack.NewDecoder(bytes.NewReader(b))
+			v, err := dec.DecodeInterface()
+			mustOK(t, err)
+			mustEqual(t, v.(string), test.in)
 
-		var dst any = ""
-		err = msgpack.Unmarshal(b, &dst)
-		require.EqualError(t, err, "msgpack: Decode(non-pointer string)")
+			var dst any = ""
+			err = msgpack.Unmarshal(b, &dst)
+			mustErrorString(t, err, "msgpack: Decode(non-pointer string)")
+		})
 	}
 }
 

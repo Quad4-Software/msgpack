@@ -8,7 +8,6 @@ import (
 
 	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
 	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack/msgpcode"
-	"github.com/stretchr/testify/require"
 )
 
 func init() {
@@ -34,108 +33,65 @@ func (ext *ExtTest) UnmarshalMsgpack(b []byte) error {
 
 func TestEncodeDecodeExtHeader(t *testing.T) {
 	v := &ExtTest{"world"}
-
 	payload, err := v.MarshalMsgpack()
-	require.Nil(t, err)
+	mustOK(t, err)
 
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
-	err = enc.EncodeExtHeader(9, len(payload))
-	require.Nil(t, err)
-
+	mustOK(t, enc.EncodeExtHeader(9, len(payload)))
 	_, err = buf.Write(payload)
-	require.Nil(t, err)
+	mustOK(t, err)
 
 	var dst any
-	err = msgpack.Unmarshal(buf.Bytes(), &dst)
-	require.Nil(t, err)
-
+	mustOK(t, msgpack.Unmarshal(buf.Bytes(), &dst))
 	v = dst.(*ExtTest)
-	wanted := "hello world"
-	require.Equal(t, v.S, wanted)
+	mustEqual(t, v.S, "hello world")
 
 	dec := msgpack.NewDecoder(&buf)
 	extID, extLen, err := dec.DecodeExtHeader()
-	require.Nil(t, err)
-	require.Equal(t, int8(9), extID)
-	require.Equal(t, len(payload), extLen)
+	mustOK(t, err)
+	mustEqual(t, extID, int8(9))
+	mustEqual(t, extLen, len(payload))
 
 	data := make([]byte, extLen)
-	err = dec.ReadFull(data)
-	require.Nil(t, err)
-
+	mustOK(t, dec.ReadFull(data))
 	v = &ExtTest{}
-	err = v.UnmarshalMsgpack(data)
-	require.Nil(t, err)
-	require.Equal(t, wanted, v.S)
+	mustOK(t, v.UnmarshalMsgpack(data))
+	mustEqual(t, v.S, "hello world")
 }
 
 func TestExt(t *testing.T) {
 	v := &ExtTest{"world"}
 	b, err := msgpack.Marshal(v)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustOK(t, err)
 
 	var dst any
-	err = msgpack.Unmarshal(b, &dst)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	mustOK(t, msgpack.Unmarshal(b, &dst))
 	v, ok := dst.(*ExtTest)
-	if !ok {
-		t.Fatalf("got %#v, wanted ExtTest", dst)
-	}
-
-	wanted := "hello world"
-	if v.S != wanted {
-		t.Fatalf("got %q, wanted %q", v.S, wanted)
-	}
+	mustTrue(t, ok, "got wrong type from Unmarshal")
+	mustEqual(t, v.S, "hello world")
 
 	ext := new(ExtTest)
-	err = msgpack.Unmarshal(b, &ext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if ext.S != wanted {
-		t.Fatalf("got %q, wanted %q", ext.S, wanted)
-	}
+	mustOK(t, msgpack.Unmarshal(b, &ext))
+	mustEqual(t, ext.S, "hello world")
 }
 
 func TestUnknownExt(t *testing.T) {
 	b := []byte{byte(msgpcode.FixExt1), 2, 0}
-
 	var dst any
 	err := msgpack.Unmarshal(b, &dst)
-	if err == nil {
-		t.Fatalf("got nil, wanted error")
-	}
-	got := err.Error()
-	wanted := "msgpack: unknown ext id=2"
-	if got != wanted {
-		t.Fatalf("got %q, wanted %q", got, wanted)
-	}
+	mustErrorString(t, err, "msgpack: unknown ext id=2")
 }
 
 func TestSliceOfTime(t *testing.T) {
 	in := []any{time.Now()}
 	b, err := msgpack.Marshal(in)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	mustOK(t, err)
 	var out []any
-	err = msgpack.Unmarshal(b, &out)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	mustOK(t, msgpack.Unmarshal(b, &out))
 	outTime := out[0].(time.Time)
 	inTime := in[0].(time.Time)
-	if outTime.Unix() != inTime.Unix() {
-		t.Fatalf("got %v, wanted %v", outTime, inTime)
-	}
+	mustEqual(t, outTime.Unix(), inTime.Unix())
 }
 
 type customPayload struct {
@@ -153,21 +109,9 @@ func (cp *customPayload) UnmarshalMsgpack(b []byte) error {
 
 func TestDecodeCustomPayload(t *testing.T) {
 	b, err := hex.DecodeString("c70500c09eec3100")
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	mustOK(t, err)
 	msgpack.RegisterExt(0, (*customPayload)(nil))
-
 	var cp *customPayload
-	err = msgpack.Unmarshal(b, &cp)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	payload := hex.EncodeToString(cp.payload)
-	wanted := "c09eec3100"
-	if payload != wanted {
-		t.Fatalf("got %q, wanted %q", payload, wanted)
-	}
+	mustOK(t, msgpack.Unmarshal(b, &cp))
+	mustEqual(t, hex.EncodeToString(cp.payload), "c09eec3100")
 }

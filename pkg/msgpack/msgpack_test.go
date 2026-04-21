@@ -10,105 +10,136 @@ import (
 	"time"
 
 	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
 )
 
 type nameStruct struct {
 	Name string
 }
 
-type MsgpackTest struct {
-	suite.Suite
-
+type msgpackHarness struct {
+	t   *testing.T
 	buf *bytes.Buffer
 	enc *msgpack.Encoder
 	dec *msgpack.Decoder
 }
 
-func (t *MsgpackTest) SetupTest() {
-	t.buf = &bytes.Buffer{}
-	t.enc = msgpack.NewEncoder(t.buf)
-	t.dec = msgpack.NewDecoder(bufio.NewReader(t.buf))
-}
-
-func TestMsgpackTestSuite(t *testing.T) {
-	suite.Run(t, new(MsgpackTest))
-}
-
-func (t *MsgpackTest) TestDecodeNil() {
-	t.NotNil(t.dec.Decode(nil))
-}
-
-func (t *MsgpackTest) TestTime() {
-	in := time.Now()
-	var out time.Time
-
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.True(out.Equal(in))
-
-	var zero time.Time
-	t.Nil(t.enc.Encode(zero))
-	t.Nil(t.dec.Decode(&out))
-	t.True(out.Equal(zero))
-	t.True(out.IsZero())
-}
-
-func (t *MsgpackTest) TestLargeBytes() {
-	N := int(1e6)
-
-	src := bytes.Repeat([]byte{'1'}, N)
-	t.Nil(t.enc.Encode(src))
-	var dst []byte
-	t.Nil(t.dec.Decode(&dst))
-	t.Equal(dst, src)
-}
-
-func (t *MsgpackTest) TestLargeString() {
-	N := int(1e6)
-
-	src := string(bytes.Repeat([]byte{'1'}, N))
-	t.Nil(t.enc.Encode(src))
-	var dst string
-	t.Nil(t.dec.Decode(&dst))
-	t.Equal(dst, src)
-}
-
-func (t *MsgpackTest) TestSliceOfStructs() {
-	in := []*nameStruct{{"hello"}}
-	var out []*nameStruct
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out, in)
-}
-
-func (t *MsgpackTest) TestMap() {
-	for _, i := range []struct {
-		m map[string]string
-		b []byte
-	}{
-		{map[string]string{}, []byte{0x80}},
-		{map[string]string{"hello": "world"}, []byte{0x81, 0xa5, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0xa5, 0x77, 0x6f, 0x72, 0x6c, 0x64}},
-	} {
-		t.Nil(t.enc.Encode(i.m))
-		t.Equal(t.buf.Bytes(), i.b, fmt.Errorf("err encoding %v", i.m))
-		var m map[string]string
-		t.Nil(t.dec.Decode(&m))
-		t.Equal(m, i.m)
+func newMsgpackHarness(t *testing.T) *msgpackHarness {
+	t.Helper()
+	buf := &bytes.Buffer{}
+	return &msgpackHarness{
+		t:   t,
+		buf: buf,
+		enc: msgpack.NewEncoder(buf),
+		dec: msgpack.NewDecoder(bufio.NewReader(buf)),
 	}
 }
 
-func (t *MsgpackTest) TestStructNil() {
-	var dst *nameStruct
-
-	t.Nil(t.enc.Encode(nameStruct{Name: "foo"}))
-	t.Nil(t.dec.Decode(&dst))
-	t.NotNil(dst)
-	t.Equal(dst.Name, "foo")
+func (h *msgpackHarness) mustEncode(v any) {
+	h.t.Helper()
+	mustOK(h.t, h.enc.Encode(v))
 }
 
-func (t *MsgpackTest) TestStructUnknownField() {
+func (h *msgpackHarness) mustDecode(dst any) {
+	h.t.Helper()
+	mustOK(h.t, h.dec.Decode(dst))
+}
+
+func TestDecodeNil(t *testing.T) {
+	h := newMsgpackHarness(t)
+	mustErr(t, h.dec.Decode(nil))
+}
+
+func TestTime(t *testing.T) {
+	t.Run("non_zero", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		in := time.Now()
+		var out time.Time
+		h.mustEncode(in)
+		h.mustDecode(&out)
+		mustTrue(t, out.Equal(in), fmt.Sprintf("got %v, want %v", out, in))
+	})
+
+	t.Run("zero", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		var zero, out time.Time
+		h.mustEncode(zero)
+		h.mustDecode(&out)
+		mustTrue(t, out.Equal(zero), fmt.Sprintf("got %v, want zero", out))
+		mustTrue(t, out.IsZero(), "expected zero time")
+	})
+}
+
+func TestLargeBytes(t *testing.T) {
+	h := newMsgpackHarness(t)
+	const n = int(1e6)
+	src := bytes.Repeat([]byte{'1'}, n)
+	h.mustEncode(src)
+	var dst []byte
+	h.mustDecode(&dst)
+	mustBytesEqual(t, dst, src)
+}
+
+func TestLargeString(t *testing.T) {
+	h := newMsgpackHarness(t)
+	const n = int(1e6)
+	src := string(bytes.Repeat([]byte{'1'}, n))
+	h.mustEncode(src)
+	var dst string
+	h.mustDecode(&dst)
+	mustEqual(t, dst, src)
+}
+
+func TestSliceOfStructs(t *testing.T) {
+	h := newMsgpackHarness(t)
+	in := []*nameStruct{{"hello"}}
+	var out []*nameStruct
+	h.mustEncode(in)
+	h.mustDecode(&out)
+	mustDeepEqual(t, out, in)
+}
+
+func TestMapStringString(t *testing.T) {
+	cases := []struct {
+		name string
+		m    map[string]string
+		want []byte
+	}{
+		{
+			name: "empty",
+			m:    map[string]string{},
+			want: []byte{0x80},
+		},
+		{
+			name: "one_pair",
+			m:    map[string]string{"hello": "world"},
+			want: []byte{0x81, 0xa5, 0x68, 0x65, 0x6c, 0x6c, 0x6f, 0xa5, 0x77, 0x6f, 0x72, 0x6c, 0x64},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newMsgpackHarness(t)
+			h.mustEncode(tc.m)
+			mustBytesEqual(t, h.buf.Bytes(), tc.want)
+			var m map[string]string
+			h.mustDecode(&m)
+			mustDeepEqual(t, m, tc.m)
+		})
+	}
+}
+
+func TestStructNil(t *testing.T) {
+	h := newMsgpackHarness(t)
+	var dst *nameStruct
+	h.mustEncode(nameStruct{Name: "foo"})
+	h.mustDecode(&dst)
+	if dst == nil {
+		t.Fatal("expected non-nil dst")
+	}
+	mustEqual(t, dst.Name, "foo")
+}
+
+func TestStructUnknownField(t *testing.T) {
+	h := newMsgpackHarness(t)
 	in := struct {
 		Field1 string
 		Field2 string
@@ -118,16 +149,13 @@ func (t *MsgpackTest) TestStructUnknownField() {
 		Field2: "value2",
 		Field3: "value3",
 	}
-	t.Nil(t.enc.Encode(in))
-
+	h.mustEncode(in)
 	out := struct {
 		Field2 string
 	}{}
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out.Field2, "value2")
+	h.mustDecode(&out)
+	mustEqual(t, out.Field2, "value2")
 }
-
-//------------------------------------------------------------------------------
 
 type coderStruct struct {
 	name string
@@ -154,48 +182,53 @@ func (s *coderStruct) DecodeMsgpack(dec *msgpack.Decoder) error {
 	return dec.Decode(&s.name)
 }
 
-func (t *MsgpackTest) TestCoder() {
-	in := &coderStruct{name: "hello"}
-	var out coderStruct
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out.Name(), "hello")
-}
+func TestCustomCoderRoundTrip(t *testing.T) {
+	t.Run("value", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		in := &coderStruct{name: "hello"}
+		var out coderStruct
+		h.mustEncode(in)
+		h.mustDecode(&out)
+		mustEqual(t, out.Name(), "hello")
+	})
 
-func (t *MsgpackTest) TestNilCoder() {
-	in := &coderStruct{name: "hello"}
-	var out *coderStruct
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out.Name(), "hello")
-}
+	t.Run("nil_pointer", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		in := &coderStruct{name: "hello"}
+		var out *coderStruct
+		h.mustEncode(in)
+		h.mustDecode(&out)
+		mustEqual(t, out.Name(), "hello")
+	})
 
-func (t *MsgpackTest) TestNilCoderValue() {
-	in := &coderStruct{name: "hello"}
-	var out *coderStruct
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.DecodeValue(reflect.ValueOf(&out)))
-	t.Equal(out.Name(), "hello")
-}
+	t.Run("decode_value", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		in := &coderStruct{name: "hello"}
+		var out *coderStruct
+		h.mustEncode(in)
+		mustOK(t, h.dec.DecodeValue(reflect.ValueOf(&out)))
+		mustEqual(t, out.Name(), "hello")
+	})
 
-func (t *MsgpackTest) TestPtrToCoder() {
-	in := &coderStruct{name: "hello"}
-	var out coderStruct
-	out2 := &out
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out2))
-	t.Equal(out.Name(), "hello")
-}
+	t.Run("pointer_to_value", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		in := &coderStruct{name: "hello"}
+		var out coderStruct
+		out2 := &out
+		h.mustEncode(in)
+		h.mustDecode(&out2)
+		mustEqual(t, out.Name(), "hello")
+	})
 
-func (t *MsgpackTest) TestWrappedCoder() {
-	in := &wrapperStruct{coderStruct: coderStruct{name: "hello"}}
-	var out wrapperStruct
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out.Name(), "hello")
+	t.Run("wrapped_embedded", func(t *testing.T) {
+		h := newMsgpackHarness(t)
+		in := &wrapperStruct{coderStruct: coderStruct{name: "hello"}}
+		var out wrapperStruct
+		h.mustEncode(in)
+		h.mustDecode(&out)
+		mustEqual(t, out.Name(), "hello")
+	})
 }
-
-//------------------------------------------------------------------------------
 
 type struct2 struct {
 	Name string
@@ -206,13 +239,14 @@ type struct1 struct {
 	Struct2 struct2
 }
 
-func (t *MsgpackTest) TestNestedStructs() {
+func TestNestedStructs(t *testing.T) {
+	h := newMsgpackHarness(t)
 	in := &struct1{Name: "hello", Struct2: struct2{Name: "world"}}
 	var out struct1
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out.Name, in.Name)
-	t.Equal(out.Struct2.Name, in.Struct2.Name)
+	h.mustEncode(in)
+	h.mustDecode(&out)
+	mustEqual(t, out.Name, in.Name)
+	mustEqual(t, out.Struct2.Name, in.Struct2.Name)
 }
 
 type Struct4 struct {
@@ -234,67 +268,41 @@ func TestEmbedding(t *testing.T) {
 	var out Struct3
 
 	b, err := msgpack.Marshal(in)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = msgpack.Unmarshal(b, &out)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out.Name1 != in.Name1 {
-		t.Fatalf("")
-	}
-	if out.Name2 != in.Name2 {
-		t.Fatalf("")
-	}
+	mustOK(t, err)
+	mustOK(t, msgpack.Unmarshal(b, &out))
+	mustEqual(t, out.Name1, in.Name1)
+	mustEqual(t, out.Name2, in.Name2)
 }
 
 func TestEmptyTimeMarshalWithInterface(t *testing.T) {
 	a := time.Time{}
 	b, err := msgpack.Marshal(a)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustOK(t, err)
+
 	var out any
-	err = msgpack.Unmarshal(b, &out)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustOK(t, msgpack.Unmarshal(b, &out))
 	name, _ := out.(time.Time).Zone()
-	if name != "UTC" {
-		t.Fatal("Got wrong timezone")
-	}
+	mustEqual(t, name, "UTC")
 
 	var out2 time.Time
-	err = msgpack.Unmarshal(b, &out2)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mustOK(t, msgpack.Unmarshal(b, &out2))
 	name, _ = out2.Zone()
-	if name != "UTC" {
-		t.Fatal("Got wrong timezone")
-	}
+	mustEqual(t, name, "UTC")
 }
 
-func (t *MsgpackTest) TestSliceNil() {
+func TestSliceNil(t *testing.T) {
+	h := newMsgpackHarness(t)
 	in := [][]*int{nil}
 	var out [][]*int
-
-	t.Nil(t.enc.Encode(in))
-	t.Nil(t.dec.Decode(&out))
-	t.Equal(out, in)
+	h.mustEncode(in)
+	h.mustDecode(&out)
+	mustDeepEqual(t, out, in)
 }
-
-//------------------------------------------------------------------------------
-
-//------------------------------------------------------------------------------
 
 func TestNoPanicOnUnsupportedKey(t *testing.T) {
 	data := []byte{0x81, 0x81, 0xa1, 0x78, 0xc3, 0xc3}
-
 	_, err := msgpack.NewDecoder(bytes.NewReader(data)).DecodeTypedMap()
-	require.EqualError(t, err, "msgpack: unsupported map key: map[string]interface {}")
+	mustErrorString(t, err, "msgpack: unsupported map key: map[string]interface {}")
 }
 
 func TestMapDefault(t *testing.T) {
@@ -305,79 +313,62 @@ func TestMapDefault(t *testing.T) {
 		},
 	}
 	b, err := msgpack.Marshal(in)
-	require.Nil(t, err)
-
+	mustOK(t, err)
 	var out map[string]any
-	err = msgpack.Unmarshal(b, &out)
-	require.Nil(t, err)
-	require.Equal(t, in, out)
+	mustOK(t, msgpack.Unmarshal(b, &out))
+	mustDeepEqual(t, out, in)
 }
 
 func TestRawMessage(t *testing.T) {
 	type In struct {
 		Foo map[string]any
 	}
-
 	type Out struct {
 		Foo msgpack.RawMessage
 	}
-
 	type Out2 struct {
 		Foo any
 	}
 
 	b, err := msgpack.Marshal(&In{
-		Foo: map[string]any{
-			"hello": "world",
-		},
+		Foo: map[string]any{"hello": "world"},
 	})
-	require.Nil(t, err)
+	mustOK(t, err)
 
 	var out Out
-	err = msgpack.Unmarshal(b, &out)
-	require.Nil(t, err)
+	mustOK(t, msgpack.Unmarshal(b, &out))
 
 	var m map[string]string
-	err = msgpack.Unmarshal(out.Foo, &m)
-	require.Nil(t, err)
-	require.Equal(t, map[string]string{
-		"hello": "world",
-	}, m)
+	mustOK(t, msgpack.Unmarshal(out.Foo, &m))
+	wantMap := map[string]string{"hello": "world"}
+	mustDeepEqual(t, m, wantMap)
 
 	msg := new(msgpack.RawMessage)
-	out2 := Out2{
-		Foo: msg,
-	}
-	err = msgpack.Unmarshal(b, &out2)
-	require.Nil(t, err)
-	require.Equal(t, out.Foo, *msg)
+	out2 := Out2{Foo: msg}
+	mustOK(t, msgpack.Unmarshal(b, &out2))
+	mustBytesEqual(t, out.Foo, *msg)
 }
 
 func TestInterface(t *testing.T) {
 	type Interface struct {
 		Foo any
 	}
-
 	in := Interface{Foo: "foo"}
 	b, err := msgpack.Marshal(in)
-	require.Nil(t, err)
-
+	mustOK(t, err)
 	var str string
 	out := Interface{Foo: &str}
-	err = msgpack.Unmarshal(b, &out)
-	require.Nil(t, err)
-	require.Equal(t, "foo", str)
+	mustOK(t, msgpack.Unmarshal(b, &out))
+	mustEqual(t, str, "foo")
 }
 
 func TestNaN(t *testing.T) {
 	in := float64(math.NaN())
 	b, err := msgpack.Marshal(in)
-	require.Nil(t, err)
-
+	mustOK(t, err)
 	var out float64
-	err = msgpack.Unmarshal(b, &out)
-	require.Nil(t, err)
-	require.True(t, math.IsNaN(out))
+	mustOK(t, msgpack.Unmarshal(b, &out))
+	mustTrue(t, math.IsNaN(out), "expected NaN")
 }
 
 func TestSetSortMapKeys(t *testing.T) {
@@ -387,27 +378,21 @@ func TestSetSortMapKeys(t *testing.T) {
 		"c": "c",
 		"d": "d",
 	}
-
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	enc.SetSortMapKeys(true)
 	dec := msgpack.NewDecoder(&buf)
 
-	err := enc.Encode(in)
-	require.Nil(t, err)
-
-	wanted := make([]byte, buf.Len())
-	copy(wanted, buf.Bytes())
+	mustOK(t, enc.Encode(in))
+	wantWire := append([]byte(nil), buf.Bytes()...)
 	buf.Reset()
 
 	for range 100 {
-		err := enc.Encode(in)
-		require.Nil(t, err)
-		require.Equal(t, wanted, buf.Bytes())
-
+		mustOK(t, enc.Encode(in))
+		mustBytesEqual(t, buf.Bytes(), wantWire)
 		out, err := dec.DecodeMap()
-		require.Nil(t, err)
-		require.Equal(t, in, out)
+		mustOK(t, err)
+		mustDeepEqual(t, out, in)
 	}
 }
 
@@ -415,14 +400,16 @@ func TestSetOmitEmpty(t *testing.T) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	enc.SetOmitEmpty(true)
-	err := enc.Encode(EmbeddingPtrTest{})
-	require.Nil(t, err)
-
-	var t2 *EmbeddingPtrTest
 	dec := msgpack.NewDecoder(&buf)
-	err = dec.Decode(&t2)
-	require.Nil(t, err)
-	require.Nil(t, t2.Exported)
+
+	t.Run("embedding_ptr_zero", func(t *testing.T) {
+		mustOK(t, enc.Encode(EmbeddingPtrTest{}))
+		var t2 *EmbeddingPtrTest
+		mustOK(t, dec.Decode(&t2))
+		if t2.Exported != nil {
+			t.Fatal("expected nil Exported")
+		}
+	})
 
 	type Nested struct {
 		Foo string
@@ -432,19 +419,22 @@ func TestSetOmitEmpty(t *testing.T) {
 		X Nested
 		Y *Nested
 	}
-	i := Item{}
-	buf.Reset()
-	err = enc.Encode(i)
-	require.Nil(t, err)
-	require.NotContains(t, buf.Bytes(), byte('X'))
-	require.NotContains(t, buf.Bytes(), byte('Y'))
 
-	i = Item{Y: &Nested{}}
-	buf.Reset()
-	err = enc.Encode(i)
-	require.Nil(t, err)
-	require.NotContains(t, buf.Bytes(), byte('X'))
-	require.Contains(t, buf.Bytes(), byte('Y'))
+	t.Run("omit_nested_zero", func(t *testing.T) {
+		buf.Reset()
+		mustOK(t, enc.Encode(Item{}))
+		raw := buf.Bytes()
+		mustTrue(t, !bytes.Contains(raw, []byte{'X'}), "did not expect field key 'X' in wire")
+		mustTrue(t, !bytes.Contains(raw, []byte{'Y'}), "did not expect field key 'Y' in wire")
+	})
+
+	t.Run("emit_pointer_field", func(t *testing.T) {
+		buf.Reset()
+		mustOK(t, enc.Encode(Item{Y: &Nested{}}))
+		raw := buf.Bytes()
+		mustTrue(t, !bytes.Contains(raw, []byte{'X'}), "did not expect field key 'X' in wire")
+		mustTrue(t, bytes.Contains(raw, []byte{'Y'}), "expected field key 'Y' in wire")
+	})
 }
 
 type NullInt struct {
@@ -521,35 +511,32 @@ type (
 
 func TestEncodeWrappedValue(t *testing.T) {
 	v := (*time.Time)(nil)
-	c := &Wrapper{
-		Value: v,
-	}
+	c := &Wrapper{Value: v}
 	var buf bytes.Buffer
-	require.Nil(t, msgpack.NewEncoder(&buf).Encode(v))
-	require.Nil(t, msgpack.NewEncoder(&buf).Encode(c))
+	mustOK(t, msgpack.NewEncoder(&buf).Encode(v))
+	mustOK(t, msgpack.NewEncoder(&buf).Encode(c))
 }
 
 func TestPtrValueDecode(t *testing.T) {
 	type Foo struct {
 		Bar *int
 	}
-
 	b, err := msgpack.Marshal(Foo{})
-	require.Nil(t, err)
+	mustOK(t, err)
 
 	bar1 := 123
 	foo := Foo{Bar: &bar1}
-
-	err = msgpack.Unmarshal(b, &foo)
-	require.Nil(t, err)
-	require.Nil(t, foo.Bar)
+	mustOK(t, msgpack.Unmarshal(b, &foo))
+	if foo.Bar != nil {
+		t.Fatal("expected nil Bar")
+	}
 
 	bar2 := 456
 	b, err = msgpack.Marshal(Foo{Bar: &bar2})
-	require.Nil(t, err)
-
-	err = msgpack.Unmarshal(b, &foo)
-	require.Nil(t, err)
-	require.NotNil(t, foo.Bar)
-	require.Equal(t, *foo.Bar, bar2)
+	mustOK(t, err)
+	mustOK(t, msgpack.Unmarshal(b, &foo))
+	if foo.Bar == nil {
+		t.Fatal("expected non-nil Bar")
+	}
+	mustEqual(t, *foo.Bar, bar2)
 }

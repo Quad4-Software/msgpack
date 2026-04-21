@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
-	"github.com/stretchr/testify/require"
 )
 
 type NoIntern struct {
@@ -23,103 +22,86 @@ type Intern struct {
 
 func TestInternedString(t *testing.T) {
 	var buf bytes.Buffer
-
 	enc := msgpack.NewEncoder(&buf)
 	enc.UseInternedStrings(true)
-
 	dec := msgpack.NewDecoder(&buf)
 	dec.UseInternedStrings(true)
 
 	for range 3 {
-		err := enc.EncodeString("hello")
-		require.Nil(t, err)
+		mustOK(t, enc.EncodeString("hello"))
 	}
-
 	for range 3 {
 		s, err := dec.DecodeString()
-		require.Nil(t, err)
-		require.Equal(t, "hello", s)
+		mustOK(t, err)
+		mustEqual(t, s, "hello")
 	}
 
-	err := enc.Encode("hello")
-	require.Nil(t, err)
-
+	mustOK(t, enc.Encode("hello"))
 	v, err := dec.DecodeInterface()
-	require.Nil(t, err)
-	require.Equal(t, "hello", v)
+	mustOK(t, err)
+	mustEqual(t, v, "hello")
 
 	_, err = dec.DecodeInterface()
-	require.Equal(t, io.EOF, err)
+	mustEqual(t, err, io.EOF)
 }
 
 func TestInternedStringTag(t *testing.T) {
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	dec := msgpack.NewDecoder(&buf)
-
 	in := []Intern{
 		{"f", "f", "f"},
 		{"fo", "fo", "fo"},
 		{"foo", "foo", "foo"},
 		{"f", "fo", "foo"},
 	}
-	err := enc.Encode(in)
-	require.Nil(t, err)
-
+	mustOK(t, enc.Encode(in))
 	var out []Intern
-	err = dec.Decode(&out)
-	require.Nil(t, err)
-	require.Equal(t, in, out)
+	mustOK(t, dec.Decode(&out))
+	mustDeepEqual(t, out, in)
 }
 
 func TestResetDict(t *testing.T) {
 	dict := []string{"hello world", "foo bar"}
-
 	var buf bytes.Buffer
 	enc := msgpack.NewEncoder(&buf)
 	dec := msgpack.NewDecoder(&buf)
 
-	{
+	t.Run("encode_string_with_dict", func(t *testing.T) {
 		enc.ResetDict(&buf, dictMap(dict))
-		err := enc.EncodeString("hello world")
-		require.Nil(t, err)
-		require.Equal(t, 3, buf.Len())
-
+		mustOK(t, enc.EncodeString("hello world"))
+		mustEqual(t, buf.Len(), 3)
 		dec.ResetDict(&buf, dict)
 		s, err := dec.DecodeString()
-		require.Nil(t, err)
-		require.Equal(t, "hello world", s)
-	}
+		mustOK(t, err)
+		mustEqual(t, s, "hello world")
+	})
 
-	{
+	t.Run("encode_interface_with_dict", func(t *testing.T) {
 		enc.ResetDict(&buf, dictMap(dict))
-		err := enc.Encode("foo bar")
-		require.Nil(t, err)
-		require.Equal(t, 3, buf.Len())
-
+		mustOK(t, enc.Encode("foo bar"))
+		mustEqual(t, buf.Len(), 3)
 		dec.ResetDict(&buf, dict)
 		s, err := dec.DecodeInterface()
-		require.Nil(t, err)
-		require.Equal(t, "foo bar", s)
-	}
+		mustOK(t, err)
+		mustEqual(t, s, "foo bar")
+	})
 
-	dec.ResetDict(&buf, dict)
-	_ = enc.EncodeString("xxxx")
-	require.Equal(t, 5, buf.Len())
-	_ = enc.Encode("xxxx")
-	require.Equal(t, 10, buf.Len())
+	t.Run("non_dict_strings_expand_buffer", func(t *testing.T) {
+		dec.ResetDict(&buf, dict)
+		_ = enc.EncodeString("xxxx")
+		mustEqual(t, buf.Len(), 5)
+		_ = enc.Encode("xxxx")
+		mustEqual(t, buf.Len(), 10)
+	})
 }
 
 func TestMapWithInternedString(t *testing.T) {
 	type M map[string]any
-
 	dict := []string{"hello world", "foo bar"}
-
 	var buf bytes.Buffer
-
 	enc := msgpack.NewEncoder(nil)
 	enc.ResetDict(&buf, dictMap(dict))
-
 	dec := msgpack.NewDecoder(nil)
 	dec.ResetDict(&buf, dict)
 
@@ -129,11 +111,9 @@ func TestMapWithInternedString(t *testing.T) {
 			"hello world": "foo bar",
 			"foo":         "bar",
 		}
-		err := enc.Encode(in)
-		require.Nil(t, err)
-
-		_, err = dec.DecodeInterface()
-		require.Nil(t, err)
+		mustOK(t, enc.Encode(in))
+		_, err := dec.DecodeInterface()
+		mustOK(t, err)
 	}
 }
 
