@@ -1,3 +1,59 @@
+## [5.7.0](https://git.quad4.io/Go-Libs/msgpack) (2026-05-01)
+
+### Performance
+
+- Added reusable-output encode APIs:
+  - `msgpack.AppendMarshal(dst, v)`
+  - `(*msgpack.Encoder).Append(dst, v)`
+- `Marshal` now routes through `AppendMarshal` while preserving default encoder semantics.
+- Hot-path allocation removal:
+  - Reused encoder-owned append writer state instead of creating per-call wrappers.
+  - Removed reflection boxing in string-slice encode path.
+  - Added addressable `time.Time` fast path in extension encoding.
+- New benchmarks in `pkg/msgpack/bench_test.go`:
+  - `BenchmarkStructAppendMarshalReuse`
+  - `BenchmarkStructEncoderAppendReuse`
+  - `BenchmarkIntEncoderAppendReuse`
+- Representative measured results (amd64):
+  - `StructAppendMarshalReuse`: ~314-318 ns/op, 0 B/op, 0 allocs/op
+  - `StructEncoderAppendReuse`: ~297-305 ns/op, 0 B/op, 0 allocs/op
+  - `IntEncoderAppendReuse`: ~13 ns/op, 0 B/op, 0 allocs/op
+
+### Security hardening
+
+- Added decode recursion-depth guard in `pkg/msgpack/decode.go`:
+  - Default limit: `10000`
+  - New API: `(*Decoder).SetDecodeDepthLimit(limit int)` (`limit <= 0` restores default)
+  - Guard enforced across recursive decode and skip paths (`DecodeValue`, interface decode dispatch, `Skip`) to mitigate stack-exhaustion payloads.
+- Added explicit `uint32 -> int` overflow protection for length/index parsing on 32-bit targets:
+  - `str32` / `bin32`, `array32`, `map32`, `ext32`, and interned-string len/index paths now reject values that overflow `int` instead of wrapping.
+
+### Fuzzing and tests
+
+- Added `pkg/msgpack/security_test.go`:
+  - `TestLengthPrefixOverflowGuards`
+  - `TestDecodeDepthLimitGuards`
+- Added fuzz targets in `pkg/msgpack/fuzz_test.go`:
+  - `FuzzDecodeLengthHeaders`
+  - `FuzzDecodeDepthGuard`
+- Tightened allocation invariants in `pkg/msgpack/invariant_test.go`:
+  - `TestInvariantAppendMarshalRoundTrip`
+  - `TestInvariantAppendMarshalZeroAllocsWithWarmBuffer`
+  - `TestInvariantEncoderAppendZeroAllocsWithWarmBuffer`
+- Validation:
+  - Full suite passes on default arch: `go test ./...`
+  - 32-bit overflow/depth guards validated with `GOARCH=386 go test ...`
+  - New fuzz targets executed successfully.
+
+### API and docs
+
+- `API.md` updated with `AppendMarshal`, `(*Encoder).Append`, and `SetDecodeDepthLimit`.
+- `README.md` updated with zero-allocation append-path notes and new security-hardening details.
+
+### Modernization
+
+- Ran `go fix ./...` and accepted safe modernizations across touched files (for example `interface{}` -> `any`, range-loop simplifications, and canonical `//go:build` tags in `safe.go` / `unsafe.go`).
+
 ## [5.6.1](https://git.quad4.io/Go-Libs/msgpack) (2026-04-21)
 
 ### Dependencies
