@@ -46,7 +46,7 @@ func TestDecodeDepthLimitGuards(t *testing.T) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
 		dec.SetDecodeDepthLimit(limit)
 
-		var out interface{}
+		var out any
 		err := dec.Decode(&out)
 		if err == nil || !strings.Contains(err.Error(), "decode nesting depth exceeds limit") {
 			t.Fatalf("expected depth-limit error, got %v", err)
@@ -67,7 +67,7 @@ func TestDecodeDepthLimitGuards(t *testing.T) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
 		dec.SetDecodeDepthLimit(depth + 16)
 
-		var out interface{}
+		var out any
 		if err := dec.Decode(&out); err != nil {
 			t.Fatalf("decode with higher limit failed: %v", err)
 		}
@@ -93,7 +93,7 @@ func assertUint32LenBehavior(t *testing.T, hint string, n int, err error) {
 
 func nestedArrayBytes(depth int) []byte {
 	b := make([]byte, 0, depth+1)
-	for i := 0; i < depth; i++ {
+	for range depth {
 		b = append(b, 0x91)
 	}
 	b = append(b, 0xc0)

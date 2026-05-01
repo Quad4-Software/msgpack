@@ -15,9 +15,9 @@ import (
 )
 
 const (
-	bytesAllocLimit = 1 << 20 // 1mb
-	sliceAllocLimit = 1e6     // 1m elements
-	maxMapSize      = 1e6     // 1m elements
+	bytesAllocLimit         = 1 << 20 // 1mb
+	sliceAllocLimit         = 1e6     // 1m elements
+	maxMapSize              = 1e6     // 1m elements
 	defaultDecodeDepthLimit = 10_000
 )
 

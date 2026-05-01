@@ -19,7 +19,7 @@ func TestDecodeFloatIntoInt64_JSONRoundtrip(t *testing.T) {
 		ID int64 `json:"id"`
 	}
 
-	var obj map[string]interface{}
+	var obj map[string]any
 	if err := json.Unmarshal([]byte(`{"id":10}`), &obj); err != nil {
 		t.Fatalf("json: %v", err)
 	}

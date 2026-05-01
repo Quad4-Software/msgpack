@@ -423,7 +423,7 @@ func BenchmarkLargeString(b *testing.B) {
 // 5-level deep structure of map[string]any values.
 func BenchmarkNestedMap(b *testing.B) {
 	var leaf any = "leaf"
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		leaf = map[string]any{"k": leaf}
 	}
 	src := leaf.(map[string]any)

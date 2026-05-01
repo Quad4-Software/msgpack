@@ -13,7 +13,7 @@ import (
 // surface returns a non-nil error and does not panic for empty or nil input.
 func TestInvariantUnmarshalNilOrEmpty(t *testing.T) {
 	cases := [][]byte{nil, {}}
-	var dst interface{}
+	var dst any
 	for _, data := range cases {
 		err := msgpack.Unmarshal(data, &dst)
 		if err == nil {
@@ -67,7 +67,7 @@ func TestInvariantScalarRoundtrip(t *testing.T) {
 	})
 }
 
-func roundtripScalar(t *testing.T, in, out interface{}) {
+func roundtripScalar(t *testing.T, in, out any) {
 	t.Helper()
 	data, err := msgpack.Marshal(in)
 	if err != nil {

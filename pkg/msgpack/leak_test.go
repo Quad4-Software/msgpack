@@ -19,10 +19,10 @@ func TestNoGoroutineLeakOnDistinctTypes(t *testing.T) {
 	before := runtime.NumGoroutine()
 
 	const types = 256
-	for i := 0; i < types; i++ {
+	for i := range types {
 		typ := reflect.StructOf([]reflect.StructField{{
 			Name: fmt.Sprintf("F%d", i),
-			Type: reflect.TypeOf(int64(0)),
+			Type: reflect.TypeFor[int64](),
 		}})
 		ptr := reflect.New(typ).Interface()
 		data, err := msgpack.Marshal(map[string]int64{fmt.Sprintf("F%d", i): int64(i)})
@@ -63,7 +63,7 @@ func TestNoGoroutineLeakOnRepeatedDecode(t *testing.T) {
 	runtime.GC()
 	before := runtime.NumGoroutine()
 
-	for i := 0; i < 5000; i++ {
+	for range 5000 {
 		var dst payload
 		if err := msgpack.Unmarshal(data, &dst); err != nil {
 			t.Fatalf("unmarshal: %v", err)
@@ -100,10 +100,10 @@ func TestConcurrentDistinctTypesPreallocate(t *testing.T) {
 	const goroutines = 32
 	const iters = 200
 	done := make(chan struct{}, goroutines)
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		go func() {
 			defer func() { done <- struct{}{} }()
-			for i := 0; i < iters; i++ {
+			for range iters {
 				var a t1
 				var b t2
 				var c t3
@@ -127,7 +127,7 @@ func TestConcurrentDistinctTypesPreallocate(t *testing.T) {
 			}
 		}()
 	}
-	for g := 0; g < goroutines; g++ {
+	for range goroutines {
 		<-done
 	}
 

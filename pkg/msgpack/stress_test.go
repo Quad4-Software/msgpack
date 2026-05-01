@@ -33,10 +33,10 @@ func TestStressConcurrentMarshalUnmarshal(t *testing.T) {
 
 	var wg sync.WaitGroup
 	wg.Add(workers)
-	for w := 0; w < workers; w++ {
+	for range workers {
 		go func() {
 			defer wg.Done()
-			for i := 0; i < perGoro; i++ {
+			for range perGoro {
 				data, err := msgpack.Marshal(src)
 				if err != nil {
 					t.Errorf("marshal: %v", err)
@@ -112,23 +112,23 @@ func TestStressLargeString(t *testing.T) {
 // surface for use-after-pool or aliasing bugs to surface.
 func TestStressDeepNestedMap(t *testing.T) {
 	const depth = 16
-	var leaf interface{} = "leaf"
-	for i := 0; i < depth; i++ {
-		leaf = map[string]interface{}{"k": leaf}
+	var leaf any = "leaf"
+	for range depth {
+		leaf = map[string]any{"k": leaf}
 	}
 
 	data, err := msgpack.Marshal(leaf)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var got interface{}
+	var got any
 	if err := msgpack.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
 	cur := got
-	for i := 0; i < depth; i++ {
-		m, ok := cur.(map[string]interface{})
+	for i := range depth {
+		m, ok := cur.(map[string]any)
 		if !ok {
 			t.Fatalf("level %d: expected map, got %T", i, cur)
 		}
@@ -146,23 +146,23 @@ func TestStressDeepNestedMap(t *testing.T) {
 // TestStressDeepNestedSlice exercises the recursive slice decoder.
 func TestStressDeepNestedSlice(t *testing.T) {
 	const depth = 16
-	var leaf interface{} = int64(42)
-	for i := 0; i < depth; i++ {
-		leaf = []interface{}{leaf}
+	var leaf any = int64(42)
+	for range depth {
+		leaf = []any{leaf}
 	}
 
 	data, err := msgpack.Marshal(leaf)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var got interface{}
+	var got any
 	if err := msgpack.Unmarshal(data, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
 	cur := got
-	for i := 0; i < depth; i++ {
-		s, ok := cur.([]interface{})
+	for i := range depth {
+		s, ok := cur.([]any)
 		if !ok {
 			t.Fatalf("level %d: expected slice, got %T", i, cur)
 		}
@@ -180,7 +180,7 @@ func TestStressDeepNestedSlice(t *testing.T) {
 // recycled encoders do not retain state from previous calls.
 func TestStressEncoderPoolReuse(t *testing.T) {
 	const iters = 1000
-	for i := 0; i < iters; i++ {
+	for i := range iters {
 		enc := msgpack.GetEncoder()
 		var buf bytes.Buffer
 		enc.Reset(&buf)

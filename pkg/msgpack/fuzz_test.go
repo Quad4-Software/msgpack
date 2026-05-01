@@ -21,7 +21,7 @@ func FuzzMarshalUnmarshalRoundtrip(f *testing.F) {
 	f.Add("\x00\xff", []byte{0xff, 0xfe, 0xfd}, int64(1<<31), -3.14, "", "x")
 
 	f.Fuzz(func(t *testing.T, s string, b []byte, i int64, fl float64, k, v string) {
-		check := func(name string, in, out interface{}) {
+		check := func(name string, in, out any) {
 			t.Helper()
 			data, err := msgpack.Marshal(in)
 			if err != nil {
@@ -90,7 +90,7 @@ func FuzzUnmarshalArbitrary(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var (
-			any  interface{}
+			any  any
 			s    string
 			b    []byte
 			i    int64
@@ -174,11 +174,11 @@ func FuzzDecodeExtHeader(f *testing.F) {
 // the NodeJS-style ext id 13). All paths must reject hostile input
 // without panicking.
 func FuzzDecodeTime(f *testing.F) {
-	f.Add([]byte{0xd6, 0xff, 0x00, 0x00, 0x00, 0x00})                                                                         // 4-byte ext, sec only
-	f.Add([]byte{0xd7, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})                                                 // 8-byte ext
-	f.Add([]byte{0xc7, 0x0c, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})                   // 12-byte ext
-	f.Add([]byte{0x92, 0x00, 0x00})                                                                                           // legacy fixarray-2
-	f.Add(append([]byte{0xb4}, []byte("2026-04-18T00:00:00Z")...))                                                            // RFC3339 string
+	f.Add([]byte{0xd6, 0xff, 0x00, 0x00, 0x00, 0x00})                                                       // 4-byte ext, sec only
+	f.Add([]byte{0xd7, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00})                               // 8-byte ext
+	f.Add([]byte{0xc7, 0x0c, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}) // 12-byte ext
+	f.Add([]byte{0x92, 0x00, 0x00})                                                                         // legacy fixarray-2
+	f.Add(append([]byte{0xb4}, []byte("2026-04-18T00:00:00Z")...))                                          // RFC3339 string
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
@@ -192,7 +192,7 @@ func FuzzDecodeTime(f *testing.F) {
 // error instead of indexing past d.dict.
 func FuzzDecodeInternedString(f *testing.F) {
 	f.Add([]byte{0xa3, 'a', 'b', 'c'})
-	f.Add([]byte{0xd4, 0x80, 0x00})       // FixExt1, internedStringExtID, idx 0
+	f.Add([]byte{0xd4, 0x80, 0x00})                   // FixExt1, internedStringExtID, idx 0
 	f.Add([]byte{0xd6, 0x80, 0xff, 0xff, 0xff, 0xff}) // FixExt4 with huge index
 
 	f.Fuzz(func(t *testing.T, data []byte) {
@@ -228,7 +228,7 @@ func FuzzDecodeMulti(f *testing.F) {
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
-		var a, b, c interface{}
+		var a, b, c any
 		_ = dec.DecodeMulti(&a, &b, &c)
 	})
 }
@@ -273,14 +273,14 @@ func FuzzDecodeDepthGuard(f *testing.F) {
 		limit := int(limitByte)
 
 		data := make([]byte, 0, depth+1)
-		for i := 0; i < depth; i++ {
+		for range depth {
 			data = append(data, 0x91)
 		}
 		data = append(data, 0xc0)
 
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
 		dec.SetDecodeDepthLimit(limit)
-		var out interface{}
+		var out any
 		_ = dec.Decode(&out)
 
 		dec = msgpack.NewDecoder(bytes.NewReader(data))
