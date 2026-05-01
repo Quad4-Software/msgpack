@@ -103,3 +103,72 @@ func TestInvariantPoolDoesNotAlias(t *testing.T) {
 		t.Fatalf("second decode leaked data: got %q", s2)
 	}
 }
+
+func TestInvariantAppendMarshalRoundTrip(t *testing.T) {
+	type payload struct {
+		Name string
+		Age  int
+	}
+
+	src := payload{Name: "alice", Age: 42}
+	dst := make([]byte, 0, 128)
+
+	b, err := msgpack.AppendMarshal(dst, src)
+	if err != nil {
+		t.Fatalf("append marshal: %v", err)
+	}
+	if cap(b) != cap(dst) {
+		t.Fatalf("append marshal changed capacity unexpectedly: got %d want %d", cap(b), cap(dst))
+	}
+
+	var out payload
+	if err := msgpack.Unmarshal(b, &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out != src {
+		t.Fatalf("roundtrip mismatch: got %+v want %+v", out, src)
+	}
+}
+
+func TestInvariantAppendMarshalZeroAllocsWithWarmBuffer(t *testing.T) {
+	const src int64 = 42
+	dst := make([]byte, 0, 256)
+	_, err := msgpack.AppendMarshal(dst, src)
+	if err != nil {
+		t.Fatalf("warmup append marshal: %v", err)
+	}
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		var runErr error
+		dst, runErr = msgpack.AppendMarshal(dst, src)
+		if runErr != nil {
+			panic(runErr)
+		}
+	})
+
+	if allocs != 0 {
+		t.Fatalf("expected zero allocations for pooled scalar encode, got %.2f", allocs)
+	}
+}
+
+func TestInvariantEncoderAppendZeroAllocsWithWarmBuffer(t *testing.T) {
+	const src int64 = 42
+	enc := msgpack.NewEncoder(nil)
+	dst := make([]byte, 0, 256)
+	_, err := enc.Append(dst, src)
+	if err != nil {
+		t.Fatalf("warmup append: %v", err)
+	}
+
+	allocs := testing.AllocsPerRun(1000, func() {
+		var runErr error
+		dst, runErr = enc.Append(dst, src)
+		if runErr != nil {
+			panic(runErr)
+		}
+	})
+
+	if allocs != 0 {
+		t.Fatalf("expected zero allocations for encoder append with warm buffer, got %.2f", allocs)
+	}
+}

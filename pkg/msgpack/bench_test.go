@@ -443,6 +443,53 @@ func BenchmarkStructMarshalReuse(b *testing.B) {
 	}
 }
 
+// BenchmarkStructAppendMarshalReuse measures Marshal-only cost when callers
+// provide a reusable destination buffer to avoid output allocations.
+func BenchmarkStructAppendMarshalReuse(b *testing.B) {
+	src := structForBenchmark()
+	dst := make([]byte, 0, 2048)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var err error
+		dst, err = msgpack.AppendMarshal(dst, src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkStructEncoderAppendReuse removes pool get/put overhead and isolates
+// struct-encoding allocations while reusing destination storage.
+func BenchmarkStructEncoderAppendReuse(b *testing.B) {
+	src := structForBenchmark()
+	enc := msgpack.NewEncoder(nil)
+	dst := make([]byte, 0, 2048)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var err error
+		dst, err = enc.Append(dst, src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkIntEncoderAppendReuse measures the lowest-allocation scalar path
+// by reusing both the encoder instance and destination buffer.
+func BenchmarkIntEncoderAppendReuse(b *testing.B) {
+	enc := msgpack.NewEncoder(nil)
+	dst := make([]byte, 0, 64)
+	const src int64 = 42
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var err error
+		dst, err = enc.Append(dst, src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkQuery(b *testing.B) {
 	var records []map[string]any
 	for i := range 1000 {
