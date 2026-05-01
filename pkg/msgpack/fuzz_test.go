@@ -232,3 +232,59 @@ func FuzzDecodeMulti(f *testing.F) {
 		_ = dec.DecodeMulti(&a, &b, &c)
 	})
 }
+
+// FuzzDecodeLengthHeaders targets raw length-header APIs directly to stress
+// overflow checks and malformed/truncated header handling.
+func FuzzDecodeLengthHeaders(f *testing.F) {
+	f.Add(byte(0), []byte{0xc6, 0xff, 0xff, 0xff, 0xff})       // bin32 max
+	f.Add(byte(1), []byte{0xdd, 0xff, 0xff, 0xff, 0xff})       // array32 max
+	f.Add(byte(2), []byte{0xdf, 0xff, 0xff, 0xff, 0xff})       // map32 max
+	f.Add(byte(3), []byte{0xc9, 0xff, 0xff, 0xff, 0xff, 0x01}) // ext32 max + type
+	f.Add(byte(4), []byte{0xc9, 0x00, 0x00, 0x00, 0x01})       // truncated ext
+
+	f.Fuzz(func(t *testing.T, mode byte, data []byte) {
+		dec := msgpack.NewDecoder(bytes.NewReader(data))
+		switch mode % 5 {
+		case 0:
+			_, _ = dec.DecodeBytesLen()
+		case 1:
+			_, _ = dec.DecodeArrayLen()
+		case 2:
+			_, _ = dec.DecodeMapLen()
+		case 3:
+			_, _, _ = dec.DecodeExtHeader()
+		default:
+			var s string
+			_ = dec.Decode(&s)
+		}
+	})
+}
+
+// FuzzDecodeDepthGuard targets deeply nested arrays under varying depth
+// limits; the decoder must return an error, not panic or overflow stack.
+func FuzzDecodeDepthGuard(f *testing.F) {
+	f.Add(byte(16), byte(32))
+	f.Add(byte(64), byte(32))
+	f.Add(byte(96), byte(64))
+	f.Add(byte(128), byte(0))
+
+	f.Fuzz(func(t *testing.T, depthByte, limitByte byte) {
+		depth := int(depthByte) + 1
+		limit := int(limitByte)
+
+		data := make([]byte, 0, depth+1)
+		for i := 0; i < depth; i++ {
+			data = append(data, 0x91)
+		}
+		data = append(data, 0xc0)
+
+		dec := msgpack.NewDecoder(bytes.NewReader(data))
+		dec.SetDecodeDepthLimit(limit)
+		var out interface{}
+		_ = dec.Decode(&out)
+
+		dec = msgpack.NewDecoder(bytes.NewReader(data))
+		dec.SetDecodeDepthLimit(limit)
+		_ = dec.Skip()
+	})
+}

@@ -94,6 +94,7 @@ func Marshal(v interface{}) ([]byte, error) {
 // hot paths.
 func AppendMarshal(dst []byte, v interface{}) ([]byte, error) {
 	enc := GetEncoder()
+	enc.Reset(nil)
 	b, err := enc.Append(dst, v)
 	PutEncoder(enc)
 	return b, err
