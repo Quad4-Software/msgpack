@@ -57,6 +57,7 @@ The upstream module has been effectively unmaintained for several years. This fo
 
 - `Unmarshal`: pooled `*bytes.Reader` wrapper. `BenchmarkStructUnmarshal` -50% B/op (96 -> 48), -1 alloc/op, -5.16% time. `BenchmarkStructUnmarshalPartially` -75% B/op (64 -> 16), -1 alloc/op, -6.68% time.
 - `Marshal`: pre-grows the encode buffer to 64 bytes, skipping the first one or two backing-array doublings for typical small payloads. The returned slice still owns its backing array; aliasing semantics are preserved.
+- `AppendMarshal` / `(*Encoder).Append`: caller-owned destination-buffer APIs for hot paths that reuse output capacity; with a warm buffer they run at zero allocs/op on both scalar and representative struct benchmarks.
 - `byteWriter.WriteByte`: writes through a 1-byte field on the wrapper struct instead of allocating a fresh `[]byte{c}` per call. `BenchmarkDiscard` -100% B/op, -100% allocs/op.
 - Pooled `*Encoder` and `*Decoder` (`GetEncoder` / `PutEncoder`, `GetDecoder` / `PutDecoder`) work as before; reuse benchmarks added in `pkg/msgpack/bench_test.go`.
 
@@ -75,6 +76,7 @@ The module path is `git.quad4.io/Go-Libs/msgpack/v5` (the `/v5` suffix matches t
 ## Features
 
 - Primitives, arrays, maps, structs, `time.Time`, and `interface{}`.
+- Allocation-aware API surface: `Marshal` for convenience and `AppendMarshal` / `(*Encoder).Append` for caller-managed reusable output buffers.
 - App Engine `*datastore.Key` and `datastore.Cursor` via `extra/msgpappengine` (optional module).
 - `CustomEncoder` / `CustomDecoder` for custom encoding.
 - Extensions, struct tags (`msgpack:"..."`), omitempty, sorted map keys, array-encoded structs, and `Decoder.Query`-style path queries.
