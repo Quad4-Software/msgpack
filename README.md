@@ -1,4 +1,4 @@
-# msgpack (Quad4 fork)
+# msgpack
 
 This repository is a **fork** of [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) (v5 API), **maintained by Quad4** at `git.quad4.io/Go-Libs/msgpack`.
 
