@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
-	"git.quad4.io/Go-Libs/pbt/pkg/pbt"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"github.com/Quad4-Software/pbt/pkg/pbt"
 )
 
 func intSliceToBytes(xs []int) []byte {

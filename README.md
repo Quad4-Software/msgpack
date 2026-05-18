@@ -1,6 +1,6 @@
 # msgpack
 
-This repository is a **fork** of [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) (v5 API), **maintained by Quad4** at `git.quad4.io/Go-Libs/msgpack`.
+This repository is a **fork** of [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) (v5 API), **maintained by Quad4** at `github.com/Quad4-Software/msgpack`.
 
 The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `Encoder` / `Decoder` call signature, struct tag, and option from upstream `v5.4.1` continues to work. This fork adds security, correctness, and performance fixes; it does not introduce breaking changes.
 
@@ -10,10 +10,10 @@ The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `E
 
    ```go
    // before
-   import "github.com/vmihailenco/msgpack/v5"
+import "github.com/vmihailenco/msgpack/v5"
 
-   // after
-   import "git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
+// after
+import "github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
    ```
 
    The package is still imported as `msgpack`, so call sites do not need to change.
@@ -21,22 +21,22 @@ The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `E
 2. Pull the module:
 
    ```bash
-   go get git.quad4.io/Go-Libs/msgpack/v5@latest
+   go get github.com/Quad4-Software/msgpack/v5@latest
    ```
 
 3. (Optional) For users of the App Engine helpers:
 
    ```go
    // before
-   import "github.com/vmihailenco/msgpack/v5/msgpappengine"
+import "github.com/vmihailenco/msgpack/v5/msgpappengine"
 
-   // after
-   import "git.quad4.io/Go-Libs/msgpack/extra/msgpappengine"
+// after
+import "github.com/Quad4-Software/msgpack/extra/msgpappengine"
    ```
 
-   This is a separate Go module; install with `go get git.quad4.io/Go-Libs/msgpack/extra/msgpappengine@latest`.
+   This is a separate Go module; install with `go get github.com/Quad4-Software/msgpack/extra/msgpappengine@latest`.
 
-The wire codes (subpackage `msgpcode`) move from `github.com/vmihailenco/msgpack/v5/msgpcode` to `git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack/msgpcode`. Constants are unchanged.
+The wire codes (subpackage `msgpcode`) move from `github.com/vmihailenco/msgpack/v5/msgpcode` to `github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode`. Constants are unchanged.
 
 ## What this fork fixes vs. upstream `v5.4.1`
 
@@ -65,14 +65,14 @@ The upstream module has been effectively unmaintained for several years. This fo
 ## Install
 
 ```bash
-go get git.quad4.io/Go-Libs/msgpack/v5@latest
+go get github.com/Quad4-Software/msgpack/v5@latest
 ```
 
 ```go
-import "git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
+import "github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
 ```
 
-The module path is `git.quad4.io/Go-Libs/msgpack/v5` (the `/v5` suffix matches the major version). Source lives under `pkg/msgpack/`; subpackage `msgpcode` is at `pkg/msgpack/msgpcode`.
+The module path is `github.com/Quad4-Software/msgpack/v5` (the `/v5` suffix matches the major version). Source lives under `pkg/msgpack/`; subpackage `msgpcode` is at `pkg/msgpack/msgpcode`.
 
 ## Features
 

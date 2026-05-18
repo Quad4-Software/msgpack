@@ -1,4 +1,4 @@
-## [5.7.0](https://git.quad4.io/Go-Libs/msgpack) (2026-05-01)
+## [5.7.0](https://github.com/Quad4-Software/msgpack) (2026-05-01)
 
 ### Performance
 
@@ -54,7 +54,7 @@
 
 - Ran `go fix ./...` and accepted safe modernizations across touched files (for example `interface{}` -> `any`, range-loop simplifications, and canonical `//go:build` tags in `safe.go` / `unsafe.go`).
 
-## [5.6.1](https://git.quad4.io/Go-Libs/msgpack) (2026-04-21)
+## [5.6.1](https://github.com/Quad4-Software/msgpack) (2026-04-21)
 
 ### Dependencies
 
@@ -67,11 +67,11 @@
 - **`pkg/msgpack/intern_test.go`**, **`pkg/msgpack/ext_test.go`**: switched to the shared helpers; **`TestResetDict`** split into named subtests.
 - **`pkg/msgpack/types_test.go`**: **`TestEncoder`** and **`TestStringsBin`** use **`t.Run`** per case and the shared helpers where appropriate.
 
-## [5.6.0](https://git.quad4.io/Go-Libs/msgpack) (2026-04-19)
+## [5.6.0](https://github.com/Quad4-Software/msgpack) (2026-04-19)
 
 ### Dependencies
 
-- `git.quad4.io/Go-Libs/tagparser/v2` **v2.1.0** ([Quad4 fork](https://git.quad4.io/Go-Libs/tagparser)) replaces `github.com/vmihailenco/tagparser/v2` for struct tag parsing in `pkg/msgpack/types.go`; import path `.../pkg/tagparser`. The same change is reflected in the `extra/msgpappengine` submodule.
+- `github.com/Quad4-Software/tagparser/v2` **v2.1.0** ([Quad4 fork](https://github.com/Quad4-Software/tagparser)) replaces `github.com/vmihailenco/tagparser/v2` for struct tag parsing in `pkg/msgpack/types.go`; import path `.../pkg/tagparser`. The same change is reflected in the `extra/msgpappengine` submodule.
 
 ### Security and correctness
 
@@ -122,20 +122,20 @@ Marginal time deltas elsewhere (`MapStringInterfaceMsgpack` +3.5%, `StructVmihai
 - `pkg/msgpack/pbt_test.go`: extended with property tests for `[]int`, `[]string`, and `map[string]string` round-trips.
 - `pkg/msgpack/bench_test.go`: parallel `BenchmarkMarshalParallel` / `BenchmarkUnmarshalParallel` exercising the encoder/decoder pools, `BenchmarkLargeByteSlice` (64 KiB), `BenchmarkLargeString` (64 KiB), `BenchmarkNestedMap` (5-level deep `map[string]any`), and `BenchmarkStructMarshalReuse` exercising `GetEncoder` / `PutEncoder`.
 
-## [5.5.0](https://git.quad4.io/Go-Libs/msgpack) (2026-04-18)
+## [5.5.0](https://github.com/Quad4-Software/msgpack) (2026-04-18)
 
 Quad4 fork: maintenance release (module path and repository layout). Upstream lineage remains [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) v5.4.1.
 
 ### Module and imports
 
-- Module path is now `git.quad4.io/Go-Libs/msgpack/v5` (major `/v5` unchanged for Go compatibility).
-- Import the API as `git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack`; wire codes as `.../pkg/msgpack/msgpcode`.
-- `extra/msgpappengine` module: `git.quad4.io/Go-Libs/msgpack/extra/msgpappengine`, with `replace` to the root module for local builds.
+- Module path is now `github.com/Quad4-Software/msgpack/v5` (major `/v5` unchanged for Go compatibility).
+- Import the API as `github.com/Quad4-Software/msgpack/v5/pkg/msgpack`; wire codes as `.../pkg/msgpack/msgpcode`.
+- `extra/msgpappengine` module: `github.com/Quad4-Software/msgpack/extra/msgpappengine`, with `replace` to the root module for local builds.
 
 ### Toolchain and dependencies
 
 - Go **1.26.2**; `go.work` includes the root module and `extra/msgpappengine`.
-- `git.quad4.io/Go-Libs/pbt` for property-based tests (test-only).
+- `github.com/Quad4-Software/pbt` for property-based tests (test-only).
 - `github.com/vmihailenco/tagparser/v2` **v2.0.0** for struct tag parsing (`pkg/msgpack/types.go`).
 - `google.golang.org/appengine` **v1.6.8** in the App Engine extra module; `github.com/golang/protobuf` **v1.5.4** and `google.golang.org/protobuf` **v1.36.11** (transitive via App Engine).
 

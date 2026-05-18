@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
 )
 
 // TestStressConcurrentMarshalUnmarshal hammers the package-level encoder

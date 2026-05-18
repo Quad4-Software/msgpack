@@ -3,7 +3,7 @@ package msgpappengine
 import (
 	"reflect"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
 	ds "google.golang.org/appengine/datastore"
 )
 

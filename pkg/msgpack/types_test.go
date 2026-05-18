@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack/msgpcode"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 //------------------------------------------------------------------------------
@@ -444,7 +444,7 @@ func (t *typeTest) requireErr(err error, s string) {
 
 var (
 	intSlice   = make([]int, 0, 3)
-	repoURL, _ = url.Parse("https://git.quad4.io/Go-Libs/msgpack")
+	repoURL, _ = url.Parse("https://github.com/Quad4-Software/msgpack")
 	typeTests  = []typeTest{
 		{in: make(chan bool), encErr: "msgpack: Encode(unsupported chan bool)"},
 

@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack/msgpcode"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 // TestInvariantUnmarshalNilOrEmpty confirms that the high-level Unmarshal

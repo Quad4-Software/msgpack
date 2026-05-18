@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
 )
 
 func ExampleMarshal() {

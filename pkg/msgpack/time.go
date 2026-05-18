@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	"git.quad4.io/Go-Libs/msgpack/v5/pkg/msgpack/msgpcode"
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 var timeExtID int8 = -1
