@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack"
 )
 
 // FuzzMarshalUnmarshalRoundtrip exercises the encoder and decoder for a

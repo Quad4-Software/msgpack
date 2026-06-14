@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"sort"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
+	"quad4/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 func encodeMapValue(e *Encoder, v reflect.Value) error {

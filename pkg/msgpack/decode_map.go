@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
+	"quad4/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 var errArrayStruct = errors.New("msgpack: number of fields in array-encoded struct has changed")

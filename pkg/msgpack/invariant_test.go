@@ -5,8 +5,8 @@ import (
 	"math"
 	"testing"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
+	"quad4/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 // TestInvariantUnmarshalNilOrEmpty confirms that the high-level Unmarshal

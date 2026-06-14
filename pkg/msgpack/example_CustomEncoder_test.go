@@ -3,7 +3,7 @@ package msgpack_test
 import (
 	"fmt"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack"
 )
 
 type customStruct struct {

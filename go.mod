@@ -1,8 +1,13 @@
-module github.com/Quad4-Software/msgpack/v5
+module quad4/msgpack/v5
 
 go 1.26.2
 
 require (
-	github.com/Quad4-Software/pbt v0.0.0-20260518091336-18705571f8c9
-	github.com/Quad4-Software/tagparser v0.1.3-0.20260518090537-f89b2bf4dade
+	quad4/pbt v0.0.0
+	quad4/tagparser v0.0.0
+)
+
+replace (
+	quad4/pbt => ../pbt
+	quad4/tagparser => ../tagparser
 )

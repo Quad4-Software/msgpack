@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack"
 )
 
 // https://github.com/fluent/fluentd/wiki/Forward-Protocol-Specification-v1#eventtime-ext-format

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack"
 )
 
 func TestLengthPrefixOverflowGuards(t *testing.T) {

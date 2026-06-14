@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack/msgpcode"
+	"quad4/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack/msgpcode"
 )
 
 //------------------------------------------------------------------------------
@@ -444,7 +444,7 @@ func (t *typeTest) requireErr(err error, s string) {
 
 var (
 	intSlice   = make([]int, 0, 3)
-	repoURL, _ = url.Parse("https://github.com/Quad4-Software/msgpack")
+	repoURL, _ = url.Parse("https://quad4/msgpack/v5")
 	typeTests  = []typeTest{
 		{in: make(chan bool), encErr: "msgpack: Encode(unsupported chan bool)"},
 

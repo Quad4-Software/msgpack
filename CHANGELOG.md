@@ -71,7 +71,7 @@
 
 ### Dependencies
 
-- `github.com/Quad4-Software/tagparser/v2` **v2.1.0** ([Quad4 fork](https://github.com/Quad4-Software/tagparser)) replaces `github.com/vmihailenco/tagparser/v2` for struct tag parsing in `pkg/msgpack/types.go`; import path `.../pkg/tagparser`. The same change is reflected in the `extra/msgpappengine` submodule.
+- `quad4/tagparser/v2` **v2.1.0** ([Quad4 fork](https://quad4/tagparser)) replaces `github.com/vmihailenco/tagparser/v2` for struct tag parsing in `pkg/msgpack/types.go`; import path `.../pkg/tagparser`. The same change is reflected in the `extra/msgpappengine` submodule.
 
 ### Security and correctness
 
@@ -128,14 +128,14 @@ Quad4 fork: maintenance release (module path and repository layout). Upstream li
 
 ### Module and imports
 
-- Module path is now `github.com/Quad4-Software/msgpack/v5` (major `/v5` unchanged for Go compatibility).
-- Import the API as `github.com/Quad4-Software/msgpack/v5/pkg/msgpack`; wire codes as `.../pkg/msgpack/msgpcode`.
+- Module path is now `quad4/msgpack/v5` (major `/v5` unchanged for Go compatibility).
+- Import the API as `quad4/msgpack/v5/pkg/msgpack`; wire codes as `.../pkg/msgpack/msgpcode`.
 - `extra/msgpappengine` module: `github.com/Quad4-Software/msgpack/extra/msgpappengine`, with `replace` to the root module for local builds.
 
 ### Toolchain and dependencies
 
 - Go **1.26.2**; `go.work` includes the root module and `extra/msgpappengine`.
-- `github.com/Quad4-Software/pbt` for property-based tests (test-only).
+- `quad4/pbt` for property-based tests (test-only).
 - `github.com/vmihailenco/tagparser/v2` **v2.0.0** for struct tag parsing (`pkg/msgpack/types.go`).
 - `google.golang.org/appengine` **v1.6.8** in the App Engine extra module; `github.com/golang/protobuf` **v1.5.4** and `google.golang.org/protobuf` **v1.36.11** (transitive via App Engine).
 

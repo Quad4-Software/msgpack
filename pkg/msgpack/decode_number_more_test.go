@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+	"quad4/msgpack/v5/pkg/msgpack"
 )
 
 // TestDecodeFloatIntoInt64_JSONRoundtrip pins the JSON -> map -> msgpack
