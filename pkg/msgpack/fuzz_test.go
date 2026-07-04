@@ -98,6 +98,7 @@ func FuzzUnmarshalArbitrary(f *testing.F) {
 			m    map[string]interface{}
 			sl   []interface{}
 			strm map[string]string
+			raw  msgpack.RawMessage
 		)
 		_ = msgpack.Unmarshal(data, &any)
 		_ = msgpack.Unmarshal(data, &s)
@@ -107,6 +108,7 @@ func FuzzUnmarshalArbitrary(f *testing.F) {
 		_ = msgpack.Unmarshal(data, &m)
 		_ = msgpack.Unmarshal(data, &sl)
 		_ = msgpack.Unmarshal(data, &strm)
+		_ = msgpack.Unmarshal(data, &raw)
 	})
 }
 
@@ -216,6 +218,30 @@ func FuzzDecodeSkip(f *testing.F) {
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
 		_ = dec.Skip()
+	})
+}
+
+// FuzzDecodeRaw drives DecodeRaw directly, then reuses the same Decoder
+// for a second, independent decode. This guards against the recording
+// buffer (d.rec) leaking a stale reference across calls when the first
+// DecodeRaw fails partway through Skip: every subsequent read on the
+// same Decoder must not silently keep recording into the abandoned
+// buffer from the failed call.
+func FuzzDecodeRaw(f *testing.F) {
+	f.Add([]byte{}, []byte{0xc0})
+	f.Add([]byte{0xc1}, []byte{0xa5, 'h', 'e', 'l', 'l', 'o'})
+	f.Add([]byte{0xc9, 0x00, 0x00, 0x00, 0x01}, []byte{0x2a})
+
+	f.Fuzz(func(t *testing.T, first, second []byte) {
+		dec := msgpack.NewDecoder(bytes.NewReader(first))
+		_, _ = dec.DecodeRaw()
+
+		// Reuse the same Decoder instance, mirroring how the package-level
+		// pool hands the same *Decoder back out across unrelated Unmarshal
+		// calls.
+		dec.Reset(bytes.NewReader(second))
+		var out any
+		_ = dec.Decode(&out)
 	})
 }
 
