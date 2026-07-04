@@ -1,3 +1,44 @@
+## [5.8.0](https://github.com/Quad4-Software/msgpack) (2026-07-04)
+
+### Security hardening
+
+- Fixed a decode-recording buffer leak in `(*Decoder).DecodeRaw` and the `Unmarshaler` decode path (`pkg/msgpack/decode.go`, `pkg/msgpack/decode_value.go`):
+  - When `Skip()` failed partway through recording, `d.rec` was left set on the `Decoder`.
+  - Every subsequent read on that instance (including decoders drawn from the package pool) would then silently append into the abandoned buffer, growing without bound for the remaining lifetime of the decoder.
+  - Both paths now clear `d.rec` on every exit via `defer`, including errors.
+
+### Memory efficiency
+
+- Capped scratch-buffer retention in the pooled encoder and decoder (`PutEncoder`, `PutDecoder` in `pkg/msgpack/encode.go` and `pkg/msgpack/decode.go`):
+  - Buffers whose capacity exceeds `bytesAllocLimit` (1 MiB) are dropped or reset before the instance re-enters `sync.Pool`, so one legitimately large payload cannot pin multi-megabyte backing arrays for unrelated future callers.
+  - Encoder `buf` is reset to the default 9-byte scratch rather than `nil` so `write1` through `write8` remain usable on the next `Get`.
+- Removed the non-functional per-type preallocator in `pkg/msgpack/decode_typgen.go`:
+  - The previous `sync.Map` of `*sync.Pool` never amortized allocation because decoded values were never returned to the pool; every `Get` was effectively `reflect.New(t)` plus map and pool overhead.
+  - `(*Decoder).UsePreallocateValues` and its flag bit are retained for API compatibility but no longer change behavior.
+  - `indirectNil` in `pkg/msgpack/types.go` now allocates with `reflect.New` directly.
+
+### Performance
+
+- Converted all wire-format opcodes in `pkg/msgpack/msgpcode` from package-level `var` to `const`:
+  - Prevents runtime mutation of opcode values by importers.
+  - Enables compile-time folding and better inlining on decode/encode hot paths.
+  - `EncodeInt` retains a package-level `negFixedNumLow` helper because `int8(0xe0)` is not a valid constant conversion in Go.
+
+### Fuzzing and tests
+
+- Added `pkg/msgpack/internal_test.go` (white-box regressions):
+  - `TestDecodeRawClearsRecOnError`, `TestDecodeRawClearsRecOnSuccess`, `TestDecodeRawErrorDoesNotPoisonSubsequentReads`
+  - `TestUnmarshalValueClearsRecOnError`
+  - `TestPutDecoderDropsOversizedBuffers`, `TestPutDecoderKeepsSmallBuffers`, `TestPooledDecoderDoesNotRetainHugePayloadCapacity`
+  - `TestPutEncoderDropsOversizedBuffers`, `TestPutEncoderKeepsSmallBuffers`, `TestPooledEncoderDoesNotRetainHugeAppendCapacity`
+  - `TestNewValueAllocatesDirectly`
+- Extended `pkg/msgpack/fuzz_test.go`:
+  - `FuzzDecodeRaw` (failed raw decode, then reuse the same decoder)
+  - `FuzzUnmarshalArbitrary` now decodes into `RawMessage` as well
+- Validation:
+  - Full suite passes: `go test ./...`, `go test -race ./...`
+  - New fuzz targets executed successfully (20s smoke runs on `FuzzDecodeRaw` and extended `FuzzUnmarshalArbitrary`).
+
 ## [5.7.0](https://github.com/Quad4-Software/msgpack) (2026-05-01)
 
 ### Performance
