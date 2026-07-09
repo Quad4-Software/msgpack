@@ -362,8 +362,8 @@ type decoderTest struct {
 var decoderTests = []decoderTest{
 	{b: []byte{byte(msgpcode.Bin32), 0x0f, 0xff, 0xff, 0xff}, out: new([]byte), err: "EOF"},
 	{b: []byte{byte(msgpcode.Str32), 0x0f, 0xff, 0xff, 0xff}, out: new([]byte), err: "EOF"},
-	{b: []byte{byte(msgpcode.Array32), 0x0f, 0xff, 0xff, 0xff}, out: new([]int), err: "EOF"},
-	{b: []byte{byte(msgpcode.Map32), 0x0f, 0xff, 0xff, 0xff}, out: new(map[int]int), err: "EOF"},
+	{b: []byte{byte(msgpcode.Array32), 0x0f, 0xff, 0xff, 0xff}, out: new([]int), err: "msgpack: array length 268435455 exceeds remaining input (0 bytes)"},
+	{b: []byte{byte(msgpcode.Map32), 0x0f, 0xff, 0xff, 0xff}, out: new(map[int]int), err: "msgpack: map length 268435455 exceeds remaining input (0 bytes)"},
 }
 
 func TestDecoder(t *testing.T) {

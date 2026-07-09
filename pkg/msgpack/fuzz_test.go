@@ -87,6 +87,12 @@ func FuzzUnmarshalArbitrary(f *testing.F) {
 	f.Add([]byte{0x90})
 	f.Add([]byte{0x80})
 	f.Add([]byte{0xa3, 'a', 'b', 'c'})
+	// Forged container lengths that previously OOMed fuzz workers (reticulum-go).
+	f.Add([]byte{0xdd, 0xff, 0xff, 0xff, 0xff}) // array32 max, no payload
+	f.Add([]byte{0xdf, 0xff, 0xff, 0xff, 0xff}) // map32 max, no payload
+	f.Add([]byte{0xdc, 0xff, 0xff})             // array16 max, no payload
+	f.Add([]byte{0xde, 0xff, 0xff})             // map16 max, no payload
+	f.Add(reticulumGoForgedArray32Payload())
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		var (
@@ -214,9 +220,53 @@ func FuzzDecodeSkip(f *testing.F) {
 	f.Add([]byte{0x90})
 	f.Add([]byte{0x80})
 	f.Add([]byte{0xdc, 0x00, 0x10})
+	f.Add([]byte{0xdd, 0xff, 0xff, 0xff, 0xff})
+	f.Add([]byte{0xdf, 0xff, 0xff, 0xff, 0xff})
+	f.Add(reticulumGoForgedArray32Payload())
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
+		_ = dec.Skip()
+	})
+}
+
+// FuzzDecodeOversizedContainers targets forged array/map length prefixes
+// that claim more elements than remaining input can hold. Before the
+// remaining-input guard, these inputs forced multi-GB allocations and
+// hung fuzz workers (critical OOM found via fuzzing in reticulum-go).
+//
+// Inputs are capped so the fuzzer cannot construct legitimately huge
+// payloads that would themselves exhaust memory.
+func FuzzDecodeOversizedContainers(f *testing.F) {
+	f.Add([]byte{0xdd, 0xff, 0xff, 0xff, 0xff})
+	f.Add([]byte{0xdf, 0xff, 0xff, 0xff, 0xff})
+	f.Add([]byte{0xdc, 0xff, 0xff})
+	f.Add([]byte{0xde, 0xff, 0xff})
+	f.Add([]byte{0x94, 0x01})
+	f.Add([]byte{0x82, 0xa1})
+	f.Add(reticulumGoForgedArray32Payload())
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		if len(data) > 4096 {
+			data = data[:4096]
+		}
+
+		var (
+			anyOut any
+			sl     []any
+			m      map[string]any
+		)
+		_ = msgpack.Unmarshal(data, &anyOut)
+		_ = msgpack.Unmarshal(data, &sl)
+		_ = msgpack.Unmarshal(data, &m)
+
+		dec := msgpack.NewDecoder(bytes.NewReader(data))
+		_, _ = dec.DecodeArrayLen()
+
+		dec = msgpack.NewDecoder(bytes.NewReader(data))
+		_, _ = dec.DecodeMapLen()
+
+		dec = msgpack.NewDecoder(bytes.NewReader(data))
 		_ = dec.Skip()
 	})
 }
@@ -267,6 +317,11 @@ func FuzzDecodeLengthHeaders(f *testing.F) {
 	f.Add(byte(2), []byte{0xdf, 0xff, 0xff, 0xff, 0xff})       // map32 max
 	f.Add(byte(3), []byte{0xc9, 0xff, 0xff, 0xff, 0xff, 0x01}) // ext32 max + type
 	f.Add(byte(4), []byte{0xc9, 0x00, 0x00, 0x00, 0x01})       // truncated ext
+	f.Add(byte(1), []byte{0xdc, 0xff, 0xff})                   // array16 max
+	f.Add(byte(2), []byte{0xde, 0xff, 0xff})                   // map16 max
+	f.Add(byte(1), []byte{0x94, 0x01})                         // fixarray truncated
+	f.Add(byte(2), []byte{0x82, 0xa1})                         // fixmap truncated
+	f.Add(byte(1), reticulumGoForgedArray32Payload())
 
 	f.Fuzz(func(t *testing.T, mode byte, data []byte) {
 		dec := msgpack.NewDecoder(bytes.NewReader(data))
