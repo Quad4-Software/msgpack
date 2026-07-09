@@ -1,3 +1,27 @@
+## [5.8.1](https://github.com/Quad4-Software/msgpack) (2026-07-09)
+
+### Security hardening
+
+- Reject forged array/map lengths that cannot fit in remaining input (`pkg/msgpack/decode.go`, `pkg/msgpack/decode_slice.go`, `pkg/msgpack/decode_map.go`):
+  - Critical OOM found via fuzzing in reticulum-go: a short payload with an `array32` header claiming ~3.7e9 elements forced multi-gigabyte allocations before EOF.
+  - When the underlying reader exposes `Len()` (for example `*bytes.Reader` / `Unmarshal`), `arrayLen` / `mapLen` now fail fast if `n > remain/minBytesPerElem` (1 byte per array element, 2 per map entry).
+  - Covers fixarray/fixmap, array16/map16, and array32/map32 on decode and skip paths.
+
+### Fuzzing and tests
+
+- Extended `pkg/msgpack/security_test.go`:
+  - `TestRejectForgedArray32DoesNotAllocateGigabytes` (reticulum-go crash shape; alloc ceiling)
+  - `TestRejectForgedMap32DoesNotAllocateGigabytes`
+  - `TestRejectOversizedContainerHeaders` (array16/32, map16/32, truncated fixarray/fixmap)
+  - `TestRejectOversizedContainerViaSkip`
+- Extended `pkg/msgpack/fuzz_test.go`:
+  - New `FuzzDecodeOversizedContainers`
+  - Seeded `FuzzUnmarshalArbitrary`, `FuzzDecodeSkip`, and `FuzzDecodeLengthHeaders` with forged oversized headers and the reticulum-go payload
+- Updated `pkg/msgpack/types_test.go` expectations for header-only array32/map32 to the remaining-input error
+- Validation:
+  - Full suite passes: `go test ./pkg/msgpack/`
+  - Fuzz smoke runs completed without crashes on `FuzzDecodeOversizedContainers`, `FuzzUnmarshalArbitrary`, `FuzzDecodeSkip`, and `FuzzDecodeLengthHeaders`
+
 ## [5.8.0](https://github.com/Quad4-Software/msgpack) (2026-07-04)
 
 ### Security hardening
@@ -23,6 +47,15 @@
   - Prevents runtime mutation of opcode values by importers.
   - Enables compile-time folding and better inlining on decode/encode hot paths.
   - `EncodeInt` retains a package-level `negFixedNumLow` helper because `int8(0xe0)` is not a valid constant conversion in Go.
+- Removed per-type preallocator overhead on reflective decode paths (see Memory efficiency above).
+- Representative measured results vs. pre-change baseline (`benchstat` over 5 runs at `-benchtime=2s`, amd64):
+  - Geomean wall time: **+2.99%** (within run-to-run noise at this sample size; no allocation regressions).
+  - `BenchmarkNestedMap`: **-5.40%** time
+  - `BenchmarkQuery`: **-5.93%** time
+  - `BenchmarkStructUnmarshalPartially`: **-3.32%** time
+  - `BenchmarkStructMarshalReuse`: **-3.73%** time
+  - `BenchmarkDiscard`: **-3.10%** time, 0 B/op, 0 allocs/op (unchanged)
+  - B/op and allocs/op: unchanged across the full benchmark set
 
 ### Fuzzing and tests
 
