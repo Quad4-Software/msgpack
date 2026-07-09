@@ -3,8 +3,8 @@ package msgpappengine
 import (
 	"reflect"
 
-	"quad4/msgpack/v5/pkg/msgpack"
 	ds "google.golang.org/appengine/datastore"
+	"quad4/msgpack/v5/pkg/msgpack"
 )
 
 func init() {

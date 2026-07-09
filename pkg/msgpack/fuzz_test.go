@@ -76,7 +76,7 @@ func FuzzMarshalUnmarshalRoundtrip(f *testing.F) {
 }
 
 // FuzzUnmarshalArbitrary feeds arbitrary bytes to Unmarshal against multiple
-// destination types. The decoder must never panic; any error is acceptable.
+// destination types. The decoder must never panic. Any error is acceptable.
 //
 // This guards the parser against malformed length prefixes, truncated
 // payloads, malicious extension types, and oversized container headers.
@@ -87,7 +87,8 @@ func FuzzUnmarshalArbitrary(f *testing.F) {
 	f.Add([]byte{0x90})
 	f.Add([]byte{0x80})
 	f.Add([]byte{0xa3, 'a', 'b', 'c'})
-	// Forged container lengths that previously OOMed fuzz workers (reticulum-go).
+	// Oversized container lengths used as regression seeds for the
+	// remaining-input length guard.
 	f.Add([]byte{0xdd, 0xff, 0xff, 0xff, 0xff}) // array32 max, no payload
 	f.Add([]byte{0xdf, 0xff, 0xff, 0xff, 0xff}) // map32 max, no payload
 	f.Add([]byte{0xdc, 0xff, 0xff})             // array16 max, no payload
@@ -134,8 +135,8 @@ func FuzzDecoderQuery(f *testing.F) {
 
 // FuzzDecodeIntoStruct hammers the struct decoder with arbitrary input
 // targeting a payload that mixes scalars, slices, maps, and time. The
-// struct decoder uses the field cache (typeDecMap) and the preallocator;
-// any panic here would indicate corruption of either.
+// struct decoder uses the field cache (typeDecMap) and the preallocator.
+// Any panic here would indicate corruption of either.
 type fuzzStructPayload struct {
 	A int64             `msgpack:"a"`
 	B string            `msgpack:"b"`
@@ -162,9 +163,9 @@ func FuzzDecodeIntoStruct(f *testing.F) {
 	})
 }
 
-// FuzzDecodeExtHeader exercises the ext-header parser. Forged ext lengths
-// must error rather than panic; the decoder must never read past the end
-// of input or allocate a multi-gigabyte buffer for a forged Ext32 length.
+// FuzzDecodeExtHeader exercises the ext-header parser. Oversized ext
+// lengths must error rather than panic. The decoder must never read past
+// the end of input or allocate a multi-gigabyte buffer for an Ext32 length.
 func FuzzDecodeExtHeader(f *testing.F) {
 	f.Add([]byte{0xd4, 0x01, 0x42})                   // FixExt1
 	f.Add([]byte{0xd6, 0xff, 0x00, 0x00, 0x00, 0x00}) // FixExt4 timeExtID
@@ -179,7 +180,7 @@ func FuzzDecodeExtHeader(f *testing.F) {
 
 // FuzzDecodeTime targets the time-extension decoder which dispatches over
 // FixedArray2, RFC3339 strings, and the ext encoding (4/8/12 bytes plus
-// the NodeJS-style ext id 13). All paths must reject hostile input
+// the NodeJS-style ext id 13). All paths must reject invalid input
 // without panicking.
 func FuzzDecodeTime(f *testing.F) {
 	f.Add([]byte{0xd6, 0xff, 0x00, 0x00, 0x00, 0x00})                                                       // 4-byte ext, sec only
@@ -196,7 +197,7 @@ func FuzzDecodeTime(f *testing.F) {
 
 // FuzzDecodeInternedString exercises the interned-string path: ext-coded
 // dictionary references and string-coded entries that grow the dict.
-// The maxDictLen guard must hold; out-of-range index references must
+// The maxDictLen guard must hold. Out-of-range index references must
 // error instead of indexing past d.dict.
 func FuzzDecodeInternedString(f *testing.F) {
 	f.Add([]byte{0xa3, 'a', 'b', 'c'})
@@ -230,10 +231,9 @@ func FuzzDecodeSkip(f *testing.F) {
 	})
 }
 
-// FuzzDecodeOversizedContainers targets forged array/map length prefixes
-// that claim more elements than remaining input can hold. Before the
-// remaining-input guard, these inputs forced multi-GB allocations and
-// hung fuzz workers (critical OOM found via fuzzing in reticulum-go).
+// FuzzDecodeOversizedContainers targets array and map length prefixes that
+// claim more elements than remaining input can hold. The remaining-input
+// guard must reject these without large allocations.
 //
 // Inputs are capped so the fuzzer cannot construct legitimately huge
 // payloads that would themselves exhaust memory.
@@ -297,7 +297,7 @@ func FuzzDecodeRaw(f *testing.F) {
 
 // FuzzDecodeMulti targets the variadic decode path. Most network framings
 // (Redis cluster, NSQ, Tarantool) read sequences rather than single
-// values; a panic here would propagate to every consumer.
+// values. A panic here would propagate to every consumer.
 func FuzzDecodeMulti(f *testing.F) {
 	f.Add([]byte{0x01, 0x02})
 	f.Add([]byte{0xc0, 0xc0, 0xc0})
@@ -342,7 +342,7 @@ func FuzzDecodeLengthHeaders(f *testing.F) {
 }
 
 // FuzzDecodeDepthGuard targets deeply nested arrays under varying depth
-// limits; the decoder must return an error, not panic or overflow stack.
+// limits. The decoder must return an error, not panic or overflow stack.
 func FuzzDecodeDepthGuard(f *testing.F) {
 	f.Add(byte(16), byte(32))
 	f.Add(byte(64), byte(32))

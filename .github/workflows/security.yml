@@ -1,0 +1,162 @@
+name: Security
+
+on:
+  push:
+    branches: [v5, master, main]
+  pull_request:
+    branches: [v5, master, main]
+  schedule:
+    - cron: "30 12 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  GOWORK: "off"
+  CI_GO_VERSION: "1.26.2"
+  CI_GOSEC_VERSION: "v2.27.1"
+  CI_GOVULNCHECK_VERSION: "v1.1.4"
+
+jobs:
+  dependency-review:
+    name: dependency-review
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Dependency review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+
+  gosec:
+    name: gosec
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: msgpack
+    steps:
+      - name: Checkout msgpack
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.CI_GO_VERSION }}
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: Install gosec
+        working-directory: ${{ github.workspace }}
+        run: sh msgpack/scripts/ci/setup-gosec.sh "${{ env.CI_GOSEC_VERSION }}"
+
+      - name: Run gosec
+        run: gosec -exclude-dir=.modcache -exclude-dir=.gocache -exclude-dir=vendor ./...
+
+  govulncheck:
+    name: govulncheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: msgpack
+    steps:
+      - name: Checkout msgpack
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ env.CI_GO_VERSION }}
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: Install govulncheck
+        working-directory: ${{ github.workspace }}
+        run: sh msgpack/scripts/ci/setup-govulncheck.sh "${{ env.CI_GOVULNCHECK_VERSION }}"
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  trivy:
+    name: trivy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          ignore-unfixed: true
+          format: table
+          output: trivy-results.txt
+
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: trivy-fs-report
+          path: trivy-results.txt
+          if-no-files-found: ignore
+          retention-days: 14

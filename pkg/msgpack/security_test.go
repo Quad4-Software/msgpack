@@ -18,8 +18,8 @@ func TestLengthPrefixOverflowGuards(t *testing.T) {
 	})
 
 	t.Run("array_len", func(t *testing.T) {
-		// Header-only array32 with a max length must fail fast: there are
-		// zero remaining payload bytes, so the claimed length is impossible.
+		// Header-only array32 with a max length must fail fast when there
+		// are zero remaining payload bytes.
 		dec := msgpack.NewDecoder(bytes.NewReader([]byte{0xdd, 0xff, 0xff, 0xff, 0xff}))
 		n, err := dec.DecodeArrayLen()
 		assertOversizedContainerRejected(t, "array length", n, err)
@@ -39,16 +39,15 @@ func TestLengthPrefixOverflowGuards(t *testing.T) {
 }
 
 func TestRejectForgedArray32DoesNotAllocateGigabytes(t *testing.T) {
-	// Nested array32 claiming ~3.7e9 elements with only ~2KB of trailing
-	// filler previously forced Unmarshal into []any to allocate multi-GB
-	// before EOF. Found via fuzzing in reticulum-go. The remaining-input
-	// guard must reject this immediately.
+	// Nested array32 claiming about 3.7e9 elements with only about 2KB of
+	// trailing filler must be rejected before Unmarshal into any allocates
+	// multi-gigabyte backing storage.
 	assertForgedContainerDoesNotAllocate(t, reticulumGoForgedArray32Payload(), "array")
 }
 
 func TestRejectForgedMap32DoesNotAllocateGigabytes(t *testing.T) {
 	// Header-only map32 with a max length must fail before allocating a
-	// multi-gigabyte map for missing key/value pairs.
+	// multi-gigabyte map for missing key and value pairs.
 	assertForgedContainerDoesNotAllocate(t, []byte{0xdf, 0xff, 0xff, 0xff, 0xff}, "map")
 }
 
@@ -92,7 +91,7 @@ func TestRejectOversizedContainerHeaders(t *testing.T) {
 		},
 		{
 			name: "fixmap_truncated",
-			// fixmap 2 needs at least 4 bytes of key/value payload; only one remains.
+			// fixmap 2 needs at least 4 bytes of key/value payload. Only one remains.
 			data: []byte{0x82, 0xa1},
 			kind: "map",
 			call: func(d *msgpack.Decoder) (int, error) { return d.DecodeMapLen() },
@@ -109,8 +108,8 @@ func TestRejectOversizedContainerHeaders(t *testing.T) {
 }
 
 func TestRejectOversizedContainerViaSkip(t *testing.T) {
-	// Skip walks array/map lengths the same way Decode does; forged
-	// headers must fail fast here too (Query and struct field skipping).
+	// Skip walks array and map lengths the same way Decode does. Oversized
+	// headers must fail fast here too for Query and struct field skipping.
 	cases := [][]byte{
 		{0xdd, 0xff, 0xff, 0xff, 0xff},
 		{0xdf, 0xff, 0xff, 0xff, 0xff},
@@ -125,16 +124,17 @@ func TestRejectOversizedContainerViaSkip(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected Skip to reject oversized container")
 			}
-			if !strings.Contains(err.Error(), "exceeds remaining input") {
-				t.Fatalf("expected remaining-input error, got %v", err)
+			if !isFailFastContainerError(err) {
+				t.Fatalf("expected fail-fast container error, got %v", err)
 			}
 		})
 	}
 }
 
-// reticulumGoForgedArray32Payload is the shape that OOMed fuzz workers in
-// reticulum-go: a short fixarray whose third element is an array32 header
-// claiming ~3.7e9 elements, followed by ~2KB of 0xdd filler.
+// reticulumGoForgedArray32Payload builds a short fixarray whose third
+// element is an array32 header claiming about 3.7e9 elements, followed by
+// about 2KB of 0xdd filler. This is a regression seed for the remaining-input
+// length guard.
 func reticulumGoForgedArray32Payload() []byte {
 	payload := make([]byte, 0, 2200)
 	payload = append(payload, 0x9a)       // fixarray 10
@@ -159,11 +159,11 @@ func assertForgedContainerDoesNotAllocate(t *testing.T, payload []byte, kind str
 	if err == nil {
 		t.Fatalf("expected forged %s to fail", kind)
 	}
-	if !strings.Contains(err.Error(), "exceeds remaining input") {
-		t.Fatalf("expected remaining-input error, got %v", err)
+	if !isFailFastContainerError(err) {
+		t.Fatalf("expected fail-fast container error, got %v", err)
 	}
 	alloc := m2.TotalAlloc - m1.TotalAlloc
-	const maxAlloc = 32 << 20 // 32 MiB ceiling; previously multi-GiB
+	const maxAlloc = 32 << 20 // 32 MiB ceiling for fail-fast rejection
 	if alloc > maxAlloc {
 		t.Fatalf("forged %s allocated %d bytes, want <= %d", kind, alloc, maxAlloc)
 	}
@@ -228,14 +228,27 @@ func assertUint32LenBehavior(t *testing.T, hint string, n int, err error) {
 func assertOversizedContainerRejected(t *testing.T, hint string, n int, err error) {
 	t.Helper()
 	if err == nil {
-		t.Fatalf("%s: expected remaining-input rejection, got n=%d", hint, n)
+		t.Fatalf("%s: expected fail-fast rejection, got n=%d", hint, n)
 	}
-	if !strings.Contains(err.Error(), "exceeds remaining input") {
-		t.Fatalf("%s: expected remaining-input error, got %v", hint, err)
+	if !isFailFastContainerError(err) {
+		t.Fatalf("%s: expected fail-fast container error, got %v", hint, err)
 	}
 	if n != 0 {
 		t.Fatalf("%s: expected zero length on rejection, got %d", hint, n)
 	}
+}
+
+// isFailFastContainerError reports whether err is a fast rejection of an
+// oversized array or map length. On 64-bit this is usually the remaining-input
+// guard. On 32-bit, lengths above math.MaxInt32 are rejected earlier by
+// uint32ToInt.
+func isFailFastContainerError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "exceeds remaining input") ||
+		strings.Contains(msg, "overflows int")
 }
 
 func nestedArrayBytes(depth int) []byte {
