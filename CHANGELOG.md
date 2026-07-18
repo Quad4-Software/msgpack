@@ -1,3 +1,17 @@
+## [5.8.2](https://github.com/Quad4-Software/msgpack) (2026-07-17)
+
+### Security hardening
+
+- Close remaining-input guard bypass when the decoder is backed by `*bufio.Reader` or a plain `io.Reader` wrap:
+  - `ResetReader` now preserves `Len()` through `bufferedLenReader` when the source exposes it
+  - When remaining size is unknown, forged array/map lengths above the soft alloc ceiling are rejected (`exceeds decode limit`) unless alloc limits are disabled
+- Reject forged bin/str/ext lengths that cannot fit in remaining input (`rejectOversizedBytes`), matching the existing array/map fail-fast behavior
+
+### Tests
+
+- `TestBufioReaderRejectsForgedArray32`, `TestBufioReaderDecodeDoesNotAllocateGigabytes`, `TestRejectForgedBin32Length`
+- Updated `TestLengthPrefixOverflowGuards` bytes/ext cases and `TestDecoder` expectations for header-only bin32/str32
+
 ## [5.8.1](https://github.com/Quad4-Software/msgpack) (2026-07-09)
 
 ### Security hardening

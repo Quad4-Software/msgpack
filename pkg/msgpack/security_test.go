@@ -14,7 +14,7 @@ func TestLengthPrefixOverflowGuards(t *testing.T) {
 	t.Run("bytes_len", func(t *testing.T) {
 		dec := msgpack.NewDecoder(bytes.NewReader([]byte{0xc6, 0xff, 0xff, 0xff, 0xff}))
 		n, err := dec.DecodeBytesLen()
-		assertUint32LenBehavior(t, "bytes length", n, err)
+		assertOversizedBytesRejected(t, "bytes length", n, err)
 	})
 
 	t.Run("array_len", func(t *testing.T) {
@@ -34,7 +34,7 @@ func TestLengthPrefixOverflowGuards(t *testing.T) {
 	t.Run("ext_len", func(t *testing.T) {
 		dec := msgpack.NewDecoder(bytes.NewReader([]byte{0xc9, 0xff, 0xff, 0xff, 0xff, 0x01}))
 		_, n, err := dec.DecodeExtHeader()
-		assertUint32LenBehavior(t, "ext length", n, err)
+		assertOversizedBytesRejected(t, "ext length", n, err)
 	})
 }
 
@@ -208,6 +208,20 @@ func TestDecodeDepthLimitGuards(t *testing.T) {
 	})
 }
 
+func assertOversizedBytesRejected(t *testing.T, hint string, n int, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s: expected fail-fast rejection, got n=%d", hint, n)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "exceeds remaining input") && !strings.Contains(msg, "overflows int") {
+		t.Fatalf("%s: expected remaining-input or overflow error, got %v", hint, err)
+	}
+	if n != 0 {
+		t.Fatalf("%s: expected zero length on rejection, got %d", hint, n)
+	}
+}
+
 func assertUint32LenBehavior(t *testing.T, hint string, n int, err error) {
 	t.Helper()
 	if strconv.IntSize == 32 {
@@ -240,14 +254,15 @@ func assertOversizedContainerRejected(t *testing.T, hint string, n int, err erro
 
 // isFailFastContainerError reports whether err is a fast rejection of an
 // oversized array or map length. On 64-bit this is usually the remaining-input
-// guard. On 32-bit, lengths above math.MaxInt32 are rejected earlier by
-// uint32ToInt.
+// guard or the soft alloc ceiling for readers without Len. On 32-bit, lengths
+// above math.MaxInt32 are rejected earlier by uint32ToInt.
 func isFailFastContainerError(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
 	return strings.Contains(msg, "exceeds remaining input") ||
+		strings.Contains(msg, "exceeds decode limit") ||
 		strings.Contains(msg, "overflows int")
 }
 
