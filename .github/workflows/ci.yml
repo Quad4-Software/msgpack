@@ -27,25 +27,21 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: linux-go1.26.2-race
-            os: ubuntu-latest
-            go: "1.26.2"
-            race: true
           - name: linux-go1.26.5-race
             os: ubuntu-latest
             go: "1.26.5"
             race: true
-          - name: macos-go1.26.2
+          - name: macos-go1.26.5
             os: macos-latest
-            go: "1.26.2"
+            go: "1.26.5"
             race: false
-          - name: windows-go1.26.2
+          - name: windows-go1.26.5
             os: windows-latest
-            go: "1.26.2"
+            go: "1.26.5"
             race: false
-          - name: linux-386-go1.26.2
+          - name: linux-386-go1.26.5
             os: ubuntu-latest
-            go: "1.26.2"
+            go: "1.26.5"
             goarch: "386"
             race: false
 
@@ -142,7 +138,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26.2"
+          go-version: "1.26.5"
           cache-dependency-path: |
             msgpack/go.mod
             msgpack/go.sum
@@ -192,7 +188,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
-          go-version: "1.26.2"
+          go-version: "1.26.5"
           cache-dependency-path: |
             msgpack/go.mod
             msgpack/go.sum

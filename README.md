@@ -18,11 +18,7 @@ The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `E
 
    The package is still imported as `msgpack`, so call sites do not need to change.
 
-2. Pull the module:
-
-   ```bash
-   go get quad4/msgpack/v5@latest
-   ```
+2. Wire the module with a `replace` (see [Install](#install)). Plain `go get quad4/msgpack/v5@...` will not resolve on its own.
 
 3. (Optional) For users of the App Engine helpers:
 
@@ -34,7 +30,7 @@ The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `E
    import "quad4/msgpack/v5/extra/msgpappengine"
    ```
 
-   This is a separate Go module; add a `replace` to the root module for local builds.
+   This is a separate Go module. Point it with a `replace` the same way as the root module.
 
 The wire codes (subpackage `msgpcode`) move from `github.com/vmihailenco/msgpack/v5/msgpcode` to `quad4/msgpack/v5/pkg/msgpack/msgpcode`. Constants are unchanged.
 
@@ -64,15 +60,48 @@ The upstream module has been effectively unmaintained for several years. This fo
 
 ## Install
 
-```bash
-go get quad4/msgpack/v5@latest
+Requires Go **1.26.5** or newer.
+
+The module path is `quad4/msgpack/v5` (the `/v5` suffix matches the major version). That path is not a public module-proxy name and not a `github.com/...` import, so the toolchain cannot fetch it until you point it at this repository (or a local checkout).
+
+### Before `go get` / vendor
+
+Add a require and a `replace` in your module's `go.mod`:
+
+```go
+require quad4/msgpack/v5 v5.8.2
+
+replace quad4/msgpack/v5 => github.com/Quad4-Software/msgpack v5.8.2
 ```
+
+Or, with a local clone next to your project:
+
+```go
+require quad4/msgpack/v5 v5.8.2
+
+replace quad4/msgpack/v5 => ../msgpack
+```
+
+Then resolve and optionally vendor:
+
+```bash
+go mod tidy
+go mod vendor
+```
+
+Use `-mod=vendor` when you want builds to read from `vendor/`:
+
+```bash
+go build -mod=vendor ./...
+```
+
+### Import
 
 ```go
 import "quad4/msgpack/v5/pkg/msgpack"
 ```
 
-The module path is `quad4/msgpack/v5` (the `/v5` suffix matches the major version). Source lives under `pkg/msgpack/`; subpackage `msgpcode` is at `pkg/msgpack/msgpcode`.
+Source lives under `pkg/msgpack/`. Subpackage `msgpcode` is at `pkg/msgpack/msgpcode`.
 
 ## Features
 

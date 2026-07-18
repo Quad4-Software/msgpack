@@ -19,7 +19,7 @@ permissions:
 env:
   GOTOOLCHAIN: local
   GOWORK: "off"
-  CI_GO_VERSION: "1.26.2"
+  CI_GO_VERSION: "1.26.5"
   CI_GOSEC_VERSION: "v2.27.1"
   CI_GOVULNCHECK_VERSION: "v1.1.4"
 

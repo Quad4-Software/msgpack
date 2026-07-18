@@ -1,6 +1,6 @@
 module quad4/msgpack/v5
 
-go 1.26.2
+go 1.26.5
 
 require (
 	quad4/pbt v0.0.0

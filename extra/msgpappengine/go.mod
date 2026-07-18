@@ -1,6 +1,6 @@
 module quad4/msgpack/v5/extra/msgpappengine
 
-go 1.26.2
+go 1.26.5
 
 replace quad4/msgpack/v5 => ../..
 
