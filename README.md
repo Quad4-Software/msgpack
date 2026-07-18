@@ -10,10 +10,10 @@ The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `E
 
    ```go
    // before
-import "github.com/vmihailenco/msgpack/v5"
+   import "github.com/vmihailenco/msgpack/v5"
 
-// after
-import "quad4/msgpack/v5/pkg/msgpack"
+   // after
+   import "quad4/msgpack/v5/pkg/msgpack"
    ```
 
    The package is still imported as `msgpack`, so call sites do not need to change.
@@ -28,10 +28,10 @@ import "quad4/msgpack/v5/pkg/msgpack"
 
    ```go
    // before
-import "github.com/vmihailenco/msgpack/v5/msgpappengine"
+   import "github.com/vmihailenco/msgpack/v5/msgpappengine"
 
-// after
-import "quad4/msgpack/v5/extra/msgpappengine"
+   // after
+   import "quad4/msgpack/v5/extra/msgpappengine"
    ```
 
    This is a separate Go module; add a `replace` to the root module for local builds.
