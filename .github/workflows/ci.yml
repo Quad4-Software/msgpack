@@ -82,9 +82,11 @@ jobs:
 
       - name: Environment
         shell: bash
+        env:
+          MATRIX_GOARCH: ${{ matrix.goarch }}
         run: |
-          if [ -n "${{ matrix.goarch }}" ]; then
-            echo "GOARCH=${{ matrix.goarch }}" >> "$GITHUB_ENV"
+          if [ -n "$MATRIX_GOARCH" ]; then
+            echo "GOARCH=${MATRIX_GOARCH}" >> "$GITHUB_ENV"
           fi
           go env
           go version

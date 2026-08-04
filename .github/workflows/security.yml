@@ -31,7 +31,6 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -40,6 +39,8 @@ jobs:
 
       - name: Dependency review
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          comment-summary-in-pr: never
 
   gosec:
     name: gosec
@@ -81,7 +82,9 @@ jobs:
 
       - name: Install gosec
         working-directory: ${{ github.workspace }}
-        run: sh msgpack/scripts/ci/setup-gosec.sh "${{ env.CI_GOSEC_VERSION }}"
+        env:
+          GOSEC_VERSION: ${{ env.CI_GOSEC_VERSION }}
+        run: sh msgpack/scripts/ci/setup-gosec.sh "$GOSEC_VERSION"
 
       - name: Run gosec
         run: gosec -exclude-dir=.modcache -exclude-dir=.gocache -exclude-dir=vendor ./...
@@ -126,7 +129,9 @@ jobs:
 
       - name: Install govulncheck
         working-directory: ${{ github.workspace }}
-        run: sh msgpack/scripts/ci/setup-govulncheck.sh "${{ env.CI_GOVULNCHECK_VERSION }}"
+        env:
+          GOVULNCHECK_VERSION: ${{ env.CI_GOVULNCHECK_VERSION }}
+        run: sh msgpack/scripts/ci/setup-govulncheck.sh "$GOVULNCHECK_VERSION"
 
       - name: Run govulncheck
         run: govulncheck ./...
@@ -135,6 +140,9 @@ jobs:
     name: trivy
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
