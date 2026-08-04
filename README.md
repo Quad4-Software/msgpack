@@ -1,72 +1,72 @@
 # msgpack
 
-This repository is a **fork** of [github.com/vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) (v5 API), maintained as `quad4/msgpack/v5`.
+Fork of [vmihailenco/msgpack](https://github.com/vmihailenco/msgpack) (v5 API), published as quad4/msgpack/v5.
 
-The wire format and public API are unchanged: every `Marshal` / `Unmarshal` / `Encoder` / `Decoder` call signature, struct tag, and option from upstream `v5.4.1` continues to work. This fork adds security, correctness, and performance fixes; it does not introduce breaking changes.
+Wire format and public API match upstream v5.4.1. Marshal, Unmarshal, Encoder, Decoder, struct tags, and options keep the same signatures. This fork adds security, correctness, and performance fixes without breaking changes.
 
-## Drop-in migration from `github.com/vmihailenco/msgpack/v5`
+## Migration from github.com/vmihailenco/msgpack/v5
 
-1. Replace the import path:
+Change the import:
 
-   ```go
-   // before
-   import "github.com/vmihailenco/msgpack/v5"
+```go
+// before
+import "github.com/vmihailenco/msgpack/v5"
 
-   // after
-   import "quad4/msgpack/v5/pkg/msgpack"
-   ```
+// after
+import "quad4/msgpack/v5/pkg/msgpack"
+```
 
-   The package is still imported as `msgpack`, so call sites do not need to change.
+The package name is still msgpack, so call sites stay the same. You also need a replace directive (see Install). Plain `go get quad4/msgpack/v5@...` will not resolve.
 
-2. Wire the module with a `replace` (see [Install](#install)). Plain `go get quad4/msgpack/v5@...` will not resolve on its own.
+App Engine helpers move to a separate module:
 
-3. (Optional) For users of the App Engine helpers:
+```go
+// before
+import "github.com/vmihailenco/msgpack/v5/msgpappengine"
 
-   ```go
-   // before
-   import "github.com/vmihailenco/msgpack/v5/msgpappengine"
+// after
+import "quad4/msgpack/v5/extra/msgpappengine"
+```
 
-   // after
-   import "quad4/msgpack/v5/extra/msgpappengine"
-   ```
+Wire opcode constants (msgpcode) move to quad4/msgpack/v5/pkg/msgpack/msgpcode. Values are unchanged.
 
-   This is a separate Go module. Point it with a `replace` the same way as the root module.
+## Fixes vs upstream v5.4.1
 
-The wire codes (subpackage `msgpcode`) move from `github.com/vmihailenco/msgpack/v5/msgpcode` to `quad4/msgpack/v5/pkg/msgpack/msgpcode`. Constants are unchanged.
-
-## What this fork fixes vs. upstream `v5.4.1`
-
-The upstream module has been effectively unmaintained for several years. This fork addresses, without changing the API:
+Upstream v5.4.1 is the last tagged release on the original module. API stays the same. Differences:
 
 ### Security
 
-- **OOM via forged length prefixes.** Four decode paths (`bytes`, `bytesPtr`, `decodeSlice`, `decodeSliceValue`, `DecodeMap`, `DecodeUntypedMap`) trusted the on-wire length and allocated up front, so a single hostile `bin32` / `str32` / `array32` / `map32` header could request a multi-gigabyte allocation before the underlying short read failed. All four now clamp the initial allocation to the documented per-decoder limit and grow incrementally as real bytes arrive. The `disableAllocLimitFlag` toggle (`Decoder.DisableAllocLimit(true)`) preserves the legacy unbounded behaviour for callers that want it.
-- **Stack exhaustion and 32-bit length overflow hardening.** Decoder recursion now enforces a depth cap (`SetDecodeDepthLimit`, default 10,000) so hostile deeply nested payloads fail with an error instead of consuming unbounded stack. `str32` / `bin32` / `array32` / `map32` / `ext32` length parsing now rejects `uint32` lengths that overflow `int` on 32-bit builds rather than silently wrapping.
-- **`disableAllocLimitFlag` was a no-op in `decodeSliceValue`.** Upstream compared the bit flag against the literal `1`, but the flag is `1 << 1 == 2`, so the limit was never applied along the typed-slice path. The comparison is now `!= 0`.
-- **Goroutine and memory leak in the per-type preallocator.** The upstream `cachedValue` spawned one perpetual goroutine for every distinct `reflect.Type` ever decoded into, plus a 256-slot buffered channel each, and held a global `sync.RWMutex` on the hot decode path. A long-running process that ever decoded into N distinct Go types retained N goroutines forever. The preallocator is now backed by a `sync.Map` of `*sync.Pool`; idle entries are reclaimed by the GC, the global mutex is gone from the lookup path, and goroutine count stays flat under churn. Verified by `TestNoGoroutineLeakOnDistinctTypes` and `TestConcurrentDistinctTypesPreallocate` in `pkg/msgpack/leak_test.go`.
+Several decode paths trusted the on-wire length and allocated up front (bytes, bytesPtr, decodeSlice, decodeSliceValue, DecodeMap, DecodeUntypedMap). A hostile bin32, str32, array32, or map32 header could force a multi-gigabyte allocation before the short read failed. Those paths now clamp the first allocation to the documented per-decoder limit and grow as bytes arrive. Decoder.DisableAllocLimit(true) restores the old unbounded behaviour.
+
+Decoder recursion has a depth cap (SetDecodeDepthLimit, default 10,000). Deeply nested payloads fail with an error instead of burning stack. Length parsing for str32, bin32, array32, map32, and ext32 rejects uint32 values that overflow int on 32-bit builds.
+
+disableAllocLimitFlag was compared against the literal 1 in decodeSliceValue, but the flag is 1<<1 (2), so the typed-slice path never applied the limit. The check is now != 0.
+
+The upstream cachedValue preallocator spawned one perpetual goroutine and a 256-slot buffered channel per distinct reflect.Type, and held a global sync.RWMutex on the hot decode path. Decoding into N Go types left N goroutines forever. This fork uses a sync.Map of sync.Pool values. Idle entries can be GC'd, the global mutex is off the lookup path, and goroutine count stays flat. See TestNoGoroutineLeakOnDistinctTypes and TestConcurrentDistinctTypesPreallocate in pkg/msgpack/leak_test.go.
 
 ### Correctness
 
-- **`invalid code=cb decoding int64` on JSON-sourced data.** `(*Decoder).int` and `(*Decoder).uint` now accept `msgpcode.Float` / `msgpcode.Double` payloads when the destination is a Go integer, provided the value is finite, integer-valued, and in range. This unblocks the common JSON -> `map[string]any` -> msgpack -> struct round-trip (`encoding/json` decodes JSON numbers into `float64` regardless of declared field type). NaN, infinities, fractional values, negative values into `uint64`, and out-of-range magnitudes still error rather than silently truncating.
-- **Pooled `*bytes.Reader` does not retain caller data.** `Marshal` / `Unmarshal` reuse internal buffers via `sync.Pool`; the wrappers are reset to `nil` before being returned to the pool so they cannot leak the previous caller's slice into a subsequent call. Verified by `TestPoolDoesNotRetainCallerData` and `TestInvariantPoolDoesNotAlias`.
+Decoder int/uint paths accept Float and Double wire codes when the destination is a Go integer, if the value is finite, integer-valued, and in range. That covers the common JSON -> map[string]any -> msgpack -> struct round-trip (encoding/json stores numbers as float64). NaN, infinities, fractions, negatives into uint64, and out-of-range magnitudes still error.
 
-### Performance (vs. upstream `v5.4.1`, geomean over 5 x 2s `benchstat` runs)
+Marshal and Unmarshal reuse buffers via sync.Pool. Wrappers are reset to nil before return so a pooled bytes.Reader cannot leak the previous caller's slice. See TestPoolDoesNotRetainCallerData and TestInvariantPoolDoesNotAlias.
 
-- `Unmarshal`: pooled `*bytes.Reader` wrapper. `BenchmarkStructUnmarshal` -50% B/op (96 -> 48), -1 alloc/op, -5.16% time. `BenchmarkStructUnmarshalPartially` -75% B/op (64 -> 16), -1 alloc/op, -6.68% time.
-- `Marshal`: pre-grows the encode buffer to 64 bytes, skipping the first one or two backing-array doublings for typical small payloads. The returned slice still owns its backing array; aliasing semantics are preserved.
-- `AppendMarshal` / `(*Encoder).Append`: caller-owned destination-buffer APIs for hot paths that reuse output capacity; with a warm buffer they run at zero allocs/op on both scalar and representative struct benchmarks.
-- `byteWriter.WriteByte`: writes through a 1-byte field on the wrapper struct instead of allocating a fresh `[]byte{c}` per call. `BenchmarkDiscard` -100% B/op, -100% allocs/op.
-- Pooled `*Encoder` and `*Decoder` (`GetEncoder` / `PutEncoder`, `GetDecoder` / `PutDecoder`) work as before; reuse benchmarks added in `pkg/msgpack/bench_test.go`.
+### Performance
+
+Geomean over five 2s benchstat runs against upstream v5.4.1:
+
+- Unmarshal: pooled bytes.Reader. BenchmarkStructUnmarshal -50% B/op (96 -> 48), -1 alloc/op, -5.16% time. BenchmarkStructUnmarshalPartially -75% B/op (64 -> 16), -1 alloc/op, -6.68% time.
+- Marshal: encode buffer starts at 64 bytes, skipping early backing-array doublings for small payloads. Returned slice still owns its array. Aliasing matches upstream.
+- AppendMarshal and Encoder.Append: caller-owned destination buffers. Warm buffer: zero allocs/op on scalar and struct benches.
+- byteWriter.WriteByte: writes through a 1-byte field instead of allocating []byte{c} each time. BenchmarkDiscard -100% B/op and allocs/op.
+- GetEncoder / PutEncoder and GetDecoder / PutDecoder behave as before. Reuse benches are in pkg/msgpack/bench_test.go.
 
 ## Install
 
-Requires Go **1.26.5** or newer.
+Go 1.26.5 or newer.
 
-The module path is `quad4/msgpack/v5` (the `/v5` suffix matches the major version). That path is not a public module-proxy name and not a `github.com/...` import, so the toolchain cannot fetch it until you point it at this repository (or a local checkout).
+Module path is quad4/msgpack/v5. That is not a public proxy name and not a github.com import, so the toolchain needs a replace pointing at this repo or a local checkout.
 
-### Before `go get` / vendor
-
-Add a require and a `replace` in your module's `go.mod`:
+In your go.mod:
 
 ```go
 require quad4/msgpack/v5 v5.8.2
@@ -74,7 +74,7 @@ require quad4/msgpack/v5 v5.8.2
 replace quad4/msgpack/v5 => github.com/Quad4-Software/msgpack v5.8.2
 ```
 
-Or, with a local clone next to your project:
+Local clone next to your project:
 
 ```go
 require quad4/msgpack/v5 v5.8.2
@@ -82,57 +82,52 @@ require quad4/msgpack/v5 v5.8.2
 replace quad4/msgpack/v5 => ../msgpack
 ```
 
-Then resolve and optionally vendor:
+Then:
 
 ```bash
 go mod tidy
-go mod vendor
-```
-
-Use `-mod=vendor` when you want builds to read from `vendor/`:
-
-```bash
+go mod vendor   # optional
 go build -mod=vendor ./...
 ```
 
-### Import
+Import:
 
 ```go
 import "quad4/msgpack/v5/pkg/msgpack"
 ```
 
-Source lives under `pkg/msgpack/`. Subpackage `msgpcode` is at `pkg/msgpack/msgpcode`.
+Source is under pkg/msgpack. msgpcode is at pkg/msgpack/msgpcode.
 
 ## Features
 
-- Primitives, arrays, maps, structs, `time.Time`, and `interface{}`.
-- Allocation-aware API surface: `Marshal` for convenience and `AppendMarshal` / `(*Encoder).Append` for caller-managed reusable output buffers.
-- App Engine `*datastore.Key` and `datastore.Cursor` via `extra/msgpappengine` (optional module).
-- `CustomEncoder` / `CustomDecoder` for custom encoding.
-- Extensions, struct tags (`msgpack:"..."`), omitempty, sorted map keys, array-encoded structs, and `Decoder.Query`-style path queries.
+- Primitives, arrays, maps, structs, time.Time, interface{}
+- Marshal for convenience, AppendMarshal / Encoder.Append for reusable output buffers
+- App Engine datastore.Key and Cursor via extra/msgpappengine (optional module)
+- CustomEncoder / CustomDecoder
+- Extensions, msgpack struct tags, omitempty, sorted map keys, array-encoded structs, Decoder.Query
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
-| `pkg/msgpack` | Public API (`Marshal`, `Encoder`, `Decoder`, etc.) |
-| `pkg/msgpack/msgpcode` | Wire format opcode constants |
-| `extra/msgpappengine` | Optional Google App Engine helpers (separate `go.mod`) |
-| `go.work` | Workspace: root module + `extra/msgpappengine` for local `go test ./...` |
-| `scripts/ci` | Local CI parity with Gitea (`test-all.sh`, `scan-all.sh`, `setup-go.sh`, ...) |
-| `.gitea/workflows` | CI (`ci.yml`) and security scan (`scan.yml`) |
+| pkg/msgpack | Public API |
+| pkg/msgpack/msgpcode | Wire opcode constants |
+| extra/msgpappengine | App Engine helpers (own go.mod) |
+| go.work | Root module + msgpappengine for local tests |
+| scripts/ci | Local CI scripts |
+| .github/workflows | CI and security workflows |
 
 ## Testing
 
-- **Unit tests** in `pkg/msgpack/*_test.go` cover the decoder/encoder surface, struct round-trips, time, ext, intern, and query paths.
-- **Property-based tests** via [pbt](https://git.quad4.io/Go-Libs/pbt) (`git.quad4.io/Go-Libs/pbt/pkg/pbt`) in `pbt_test.go` (roundtrip properties for `[]byte`, `string`, `[]int`, `[]string`, `map[string]int`, `map[string]string`).
-- **Fuzz targets** in `fuzz_test.go`: `FuzzMarshalUnmarshalRoundtrip`, `FuzzUnmarshalArbitrary`, `FuzzDecoderQuery`, `FuzzDecodeIntoStruct`, `FuzzDecodeExtHeader`, `FuzzDecodeTime`, `FuzzDecodeInternedString`, `FuzzDecodeSkip`, `FuzzDecodeMulti`. Regression corpora for the allocation-limit fixes are committed under `pkg/msgpack/testdata/fuzz/`.
-- **Stress tests** in `stress_test.go`: concurrent `Marshal` / `Unmarshal` under `-race`, large byte slice / string round-trips, deeply nested map and slice round-trips, repeated reuse of pooled encoder/decoder.
-- **Invariant tests** in `invariant_test.go`: `Unmarshal(nil)` / empty input never panics; `Marshal(nil)` is a single `msgpcode.Nil` byte; bit-exact round-trip of `int64` min, `uint64` max, `NaN`, `-Inf`; pool aliasing checks.
-- **Leak tests** in `leak_test.go`: per-type preallocator must not retain goroutines or values across decoder churn.
+Unit tests cover the encoder/decoder surface, structs, time, extensions, intern, and queries.
 
-Run `go test -race ./...` for the full suite; `make` runs `go vet` plus tests.
+Property tests (pbt) live in pbt_test.go. Fuzz targets and allocation-limit corpora are in fuzz_test.go and pkg/msgpack/testdata/fuzz. stress_test.go covers concurrent Marshal/Unmarshal under -race, large payloads, deep nesting, and pool reuse. invariant_test.go and leak_test.go cover nil/empty input, bit-exact extremes, pool aliasing, and preallocator goroutine retention.
+
+```bash
+go test -race ./...
+make   # go vet + tests
+```
 
 ## License
 
-BSD 2-clause; see [LICENSE](LICENSE). Original copyright remains with the vmihailenco authors; fork maintenance is attributed in this README.
+BSD 2-clause. See [LICENSE](LICENSE). Original copyright remains with the vmihailenco authors. Fork maintenance is attributed here.
