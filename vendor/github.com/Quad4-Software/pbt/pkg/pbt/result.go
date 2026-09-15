@@ -9,10 +9,13 @@ type Result[T any] struct {
 	Passed            bool           // True if all runs passed and coverage met.
 	TimedOut          bool           // True if the run was aborted by timeout.
 	CoverageFailed    bool           // True if label/bucket thresholds were not met.
+	Exhausted         bool           // True if the precondition discard limit was exceeded.
+	Skipped           int            // Generated cases rejected by the precondition.
 	PropertyName      string         // Name of the property that was checked.
-	Runs              int            // Total number of runs executed.
+	Runs              int            // Total number of runs budgeted.
 	Seed              int64          // Random seed used; use WithSeed to reproduce.
 	GeneratorName     string         // Name of the generator that produced inputs.
+	FailureIndex      int            // Index in the deterministic generated stream that produced the counterexample; -1 when none.
 	Counterexample    T              // Failing value when HasCounterexample is true.
 	HasCounterexample bool           // True if a counterexample was found.
 	FailureLabels     []string       // Classifier output for the failing value.
@@ -46,9 +49,19 @@ func (r Result[T]) Error() string {
 			r.CoverageErrors,
 		)
 	}
+	if r.Exhausted {
+		return fmt.Sprintf(
+			"property %q gave up: %d generated cases skipped by the precondition (seed=%d, generator=%s)",
+			r.PropertyName,
+			r.Skipped,
+			r.Seed,
+			r.GeneratorName,
+		)
+	}
 	return fmt.Sprintf(
-		"property %q failed after %d runs (seed=%d, generator=%s, counterexample=%v, labels=%v)",
+		"property %q failed at run %d of %d (seed=%d, generator=%s, counterexample=%v, labels=%v)",
 		r.PropertyName,
+		r.FailureIndex,
 		r.Runs,
 		r.Seed,
 		r.GeneratorName,

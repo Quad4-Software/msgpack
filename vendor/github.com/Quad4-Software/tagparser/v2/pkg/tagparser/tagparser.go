@@ -3,7 +3,7 @@ package tagparser
 import (
 	"strings"
 
-	"github.com/Quad4-Software/tagparser/internal/parser"
+	"github.com/Quad4-Software/tagparser/v2/internal/parser"
 )
 
 type Tag struct {
@@ -21,7 +21,7 @@ func (t *Tag) HasOption(name string) bool {
 
 func Parse(s string) *Tag {
 	p := &tagParser{Parser: parser.NewString(s)}
-	p.parseKey()
+	p.parse()
 	return &p.Tag
 }
 
@@ -56,7 +56,15 @@ func (p *tagParser) setTagOption(key, value string) {
 	}
 }
 
-func (p *tagParser) parseKey() {
+// parse consumes one comma separated segment per iteration. The segment
+// scanners below report through their return value whether another segment
+// follows, so the input length cannot grow the call stack.
+func (p *tagParser) parse() {
+	for p.parseKey() {
+	}
+}
+
+func (p *tagParser) parseKey() bool {
 	b := p.buf[:0]
 	for p.Valid() {
 		c := p.Read()
@@ -65,17 +73,14 @@ func (p *tagParser) parseKey() {
 			p.Skip(' ')
 			p.setTagOption("", string(b))
 			p.buf = b
-			p.parseKey()
-			return
+			return true
 		case ':':
 			key := string(b)
 			p.buf = b
-			p.parseValue(key)
-			return
+			return p.parseValue(key)
 		case '\'':
 			p.buf = b
-			p.parseQuotedValue("")
-			return
+			return p.parseQuotedValue("")
 		default:
 			b = append(b, c)
 		}
@@ -84,15 +89,15 @@ func (p *tagParser) parseKey() {
 	if len(b) > 0 {
 		p.setTagOption("", string(b))
 	}
+	return false
 }
 
-func (p *tagParser) parseValue(key string) {
+func (p *tagParser) parseValue(key string) bool {
 	const quote = '\''
 	c := p.Peek()
 	if c == quote {
 		p.Skip(quote)
-		p.parseQuotedValue(key)
-		return
+		return p.parseQuotedValue(key)
 	}
 
 	b := p.buf[:0]
@@ -100,7 +105,11 @@ func (p *tagParser) parseValue(key string) {
 		c = p.Read()
 		switch c {
 		case '\\':
-			b = append(b, p.Read())
+			if p.Valid() {
+				b = append(b, p.Read())
+			} else {
+				b = append(b, c)
+			}
 		case '(':
 			b = append(b, c)
 			b = p.readBrackets(b)
@@ -108,13 +117,13 @@ func (p *tagParser) parseValue(key string) {
 			p.Skip(' ')
 			p.setTagOption(key, string(b))
 			p.buf = b
-			p.parseKey()
-			return
+			return true
 		default:
 			b = append(b, c)
 		}
 	}
 	p.setTagOption(key, string(b))
+	return false
 }
 
 func (p *tagParser) readBrackets(b []byte) []byte {
@@ -124,7 +133,11 @@ loop:
 		c := p.Read()
 		switch c {
 		case '\\':
-			b = append(b, p.Read())
+			if p.Valid() {
+				b = append(b, p.Read())
+			} else {
+				b = append(b, c)
+			}
 		case '(':
 			b = append(b, c)
 			lvl++
@@ -141,7 +154,7 @@ loop:
 	return b
 }
 
-func (p *tagParser) parseQuotedValue(key string) {
+func (p *tagParser) parseQuotedValue(key string) bool {
 	const quote = '\''
 	b := p.buf[:0]
 	for p.Valid() {
@@ -151,7 +164,11 @@ func (p *tagParser) parseQuotedValue(key string) {
 			break
 		}
 
-		if len(bb) > 0 && bb[len(bb)-1] == '\\' {
+		// A quote preceded by an odd number of backslashes is escaped; the
+		// last backslash is dropped and the quote kept literally. An even
+		// count (including a double backslash) leaves the quote as the
+		// terminator.
+		if n := trailingBackslashes(bb); n%2 == 1 {
 			b = append(b, bb[:len(bb)-1]...)
 			b = append(b, quote)
 			continue
@@ -166,5 +183,13 @@ func (p *tagParser) parseQuotedValue(key string) {
 	if p.Skip(',') {
 		p.Skip(' ')
 	}
-	p.parseKey()
+	return true
+}
+
+func trailingBackslashes(b []byte) int {
+	n := 0
+	for i := len(b) - 1; i >= 0 && b[i] == '\\'; i-- {
+		n++
+	}
+	return n
 }

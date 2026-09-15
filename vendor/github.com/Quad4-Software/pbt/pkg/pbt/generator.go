@@ -5,6 +5,8 @@ package pbt
 import (
 	"math/rand"
 	"strings"
+	"time"
+	"unicode"
 )
 
 const asciiAlphabet = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -151,5 +153,197 @@ func SliceOf[T any](elem Generator[T], low int, high int) Generator[[]T] {
 func Map[A any, B any](name string, source Generator[A], mapper func(A) B) Generator[B] {
 	return NewGenerator(name, func(r *rand.Rand, size int) B {
 		return mapper(source.Generate(r, size))
+	})
+}
+
+// Int64 generates values across the full int64 range.
+func Int64() Generator[int64] {
+	return NewGenerator("Int64", func(r *rand.Rand, _ int) int64 {
+		// #nosec G115 -- full-range bit pattern cast is the intended distribution.
+		return int64(r.Uint64())
+	})
+}
+
+// Int64Range generates int64 values in the inclusive range [low, high].
+func Int64Range(low int64, high int64) Generator[int64] {
+	if low > high {
+		low, high = high, low
+	}
+
+	return NewGenerator("Int64Range", func(r *rand.Rand, _ int) int64 {
+		// #nosec G115 -- unsigned width arithmetic intentionally handles full int64 span.
+		width := uint64(high) - uint64(low) + 1
+		if width == 0 {
+			// #nosec G115 -- full-range random bit pattern mapped directly to int64.
+			return int64(r.Uint64())
+		}
+		// #nosec G115 -- modulo mapping intentionally uses unsigned arithmetic.
+		return int64(uint64(low) + r.Uint64()%width)
+	})
+}
+
+// Uint64 generates values across the full uint64 range.
+func Uint64() Generator[uint64] {
+	return NewGenerator("Uint64", func(r *rand.Rand, _ int) uint64 {
+		return r.Uint64()
+	})
+}
+
+// Bytes generates byte slices with length in [low, high].
+func Bytes(low int, high int) Generator[[]byte] {
+	if low < 0 {
+		low = 0
+	}
+	if low > high {
+		low, high = high, low
+		if low < 0 {
+			low = 0
+		}
+	}
+
+	return NewGenerator("Bytes", func(r *rand.Rand, size int) []byte {
+		localHigh := high
+		if size > 0 && size < localHigh {
+			localHigh = size
+		}
+		if localHigh < low {
+			localHigh = low
+		}
+
+		length := low
+		if localHigh > low {
+			length = low + r.Intn(localHigh-low+1)
+		}
+
+		out := make([]byte, length)
+		for i := range out {
+			out[i] = byte(r.Uint32())
+		}
+		return out
+	})
+}
+
+// String generates UTF-8 strings of printable runes with length in [low, high]
+// runes. Unlike StringASCII the alphabet covers the full Unicode printable
+// range, which exercises encoding and validation paths that ASCII misses.
+func String(low int, high int) Generator[string] {
+	if low < 0 {
+		low = 0
+	}
+	if low > high {
+		low, high = high, low
+		if low < 0 {
+			low = 0
+		}
+	}
+
+	return NewGenerator("String", func(r *rand.Rand, size int) string {
+		localHigh := high
+		if size > 0 && size < localHigh {
+			localHigh = size
+		}
+		if localHigh < low {
+			localHigh = low
+		}
+
+		length := low
+		if localHigh > low {
+			length = low + r.Intn(localHigh-low+1)
+		}
+
+		var b strings.Builder
+		for i := 0; i < length; i++ {
+			b.WriteRune(randomPrintableRune(r))
+		}
+		return b.String()
+	})
+}
+
+// randomPrintableRune draws a printable non-surrogate code point. Rejection is
+// bounded because roughly a quarter of the code point space is printable.
+func randomPrintableRune(r *rand.Rand) rune {
+	for i := 0; i < 64; i++ {
+		candidate := rune(r.Uint32() % 0x110000)
+		if candidate >= 0xD800 && candidate <= 0xDFFF {
+			continue
+		}
+		if unicode.IsPrint(candidate) {
+			return candidate
+		}
+	}
+	return 'x'
+}
+
+// MapOf generates maps with up to high entries drawn from the key and value
+// generators. Duplicate keys collapse, so the resulting map can contain fewer
+// than low entries when the key space is small.
+func MapOf[K comparable, V any](key Generator[K], value Generator[V], low int, high int) Generator[map[K]V] {
+	if low < 0 {
+		low = 0
+	}
+	if low > high {
+		low, high = high, low
+		if low < 0 {
+			low = 0
+		}
+	}
+
+	return NewGenerator("MapOf", func(r *rand.Rand, size int) map[K]V {
+		localHigh := high
+		if size > 0 && size < localHigh {
+			localHigh = size
+		}
+		if localHigh < low {
+			localHigh = low
+		}
+
+		length := low
+		if localHigh > low {
+			length = low + r.Intn(localHigh-low+1)
+		}
+
+		out := make(map[K]V, length)
+		for i := 0; i < length; i++ {
+			out[key.Generate(r, size)] = value.Generate(r, size)
+		}
+		return out
+	})
+}
+
+// DurationRange generates time.Duration values in the inclusive range
+// [low, high].
+func DurationRange(low time.Duration, high time.Duration) Generator[time.Duration] {
+	if low > high {
+		low, high = high, low
+	}
+
+	return NewGenerator("DurationRange", func(r *rand.Rand, _ int) time.Duration {
+		// #nosec G115 -- unsigned width arithmetic intentionally handles full duration span.
+		width := uint64(high) - uint64(low) + 1
+		if width == 0 {
+			// #nosec G115 -- full-range random bit pattern mapped directly to duration.
+			return time.Duration(r.Uint64())
+		}
+		// #nosec G115 -- modulo mapping intentionally uses unsigned arithmetic.
+		return time.Duration(uint64(low) + r.Uint64()%width)
+	})
+}
+
+// PtrOf generates pointers where nilPercent percent of values are nil. A
+// nilPercent of 0 always produces non-nil values, 100 always produces nil.
+func PtrOf[T any](elem Generator[T], nilPercent int) Generator[*T] {
+	if nilPercent < 0 {
+		nilPercent = 0
+	}
+	if nilPercent > 100 {
+		nilPercent = 100
+	}
+
+	return NewGenerator("PtrOf", func(r *rand.Rand, size int) *T {
+		if r.Intn(100) < nilPercent {
+			return nil
+		}
+		value := elem.Generate(r, size)
+		return &value
 	})
 }

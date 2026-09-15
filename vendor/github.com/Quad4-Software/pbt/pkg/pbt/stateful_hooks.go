@@ -110,6 +110,7 @@ type StatefulShrinkPassEvent[S any] struct {
 // StatefulRunEndEvent is emitted at stateful run end.
 type StatefulRunEndEvent struct {
 	Passed       bool
+	TimedOut     bool
 	ShrinkPasses int
 	Elapsed      time.Duration
 }

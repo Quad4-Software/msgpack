@@ -3,7 +3,9 @@
 package pbt
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 )
 
@@ -21,7 +23,7 @@ type StatefulReplayFixture struct {
 // ToStatefulReplayFixture converts a failing stateful result to replay data.
 func (r StatefulResult[S]) ToStatefulReplayFixture() (StatefulReplayFixture, error) {
 	if r.Passed || len(r.StepSeeds) == 0 {
-		return StatefulReplayFixture{}, os.ErrInvalid
+		return StatefulReplayFixture{}, fmt.Errorf("pbt: stateful result does not contain a failing trace")
 	}
 	return StatefulReplayFixture{
 		ModelName:    r.ModelName,
@@ -57,7 +59,7 @@ func ReadStatefulReplayFixture(path string) (StatefulReplayFixture, error) {
 
 // ReplayStatefulFixture executes the exact recorded failing sequence.
 func ReplayStatefulFixture[S any](model CommandModel[S], fixture StatefulReplayFixture) StatefulResult[S] {
-	run := runStatefulWithSeeds(model, fixture.ScenarioSeed, fixture.StepSeeds)
+	run := runStatefulWithSeeds(context.Background(), model, fixture.ScenarioSeed, fixture.StepSeeds)
 	result := StatefulResult[S]{
 		Passed:        run.Passed,
 		ModelName:     model.Name,

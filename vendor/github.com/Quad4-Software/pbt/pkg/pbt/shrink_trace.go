@@ -8,24 +8,32 @@ func shrinkWithTrace[T any](shrinker Shrinker[T], value T, predicate Predicate[T
 	if workers < minShrinkWorkers {
 		workers = minShrinkWorkers
 	}
-	if parallel, ok := shrinker.(ParallelTraceShrinker[T]); ok {
-		trace, final, changed := parallel.ShrinkTraceParallel(value, predicate, workers)
-		if changed {
-			return final, trace
-		}
-		return value, trace
-	}
-	if traced, ok := shrinker.(TraceShrinker[T]); ok {
-		trace, final, changed := traced.ShrinkTrace(value, predicate)
-		if changed {
-			return final, trace
-		}
-		return value, trace
+
+	var (
+		trace   []T
+		final   T
+		changed bool
+	)
+	switch s := shrinker.(type) {
+	case ParallelTraceShrinker[T]:
+		trace, final, changed = s.ShrinkTraceParallel(value, predicate, workers)
+	case TraceShrinker[T]:
+		trace, final, changed = s.ShrinkTrace(value, predicate)
+	default:
+		final, changed = shrinker.Shrink(value, predicate)
 	}
 
-	final, changed := shrinker.Shrink(value, predicate)
 	if !changed {
 		return value, nil
 	}
-	return final, []T{value, final}
+	// A shrinker must only return values that still fail the predicate. When a
+	// custom shrinker violates that contract the original counterexample is
+	// kept so the reported value always reproduces the failure.
+	if predicate(final) {
+		return value, nil
+	}
+	if len(trace) == 0 {
+		trace = []T{value, final}
+	}
+	return final, trace
 }

@@ -21,7 +21,7 @@ env:
   GOWORK: "off"
   CI_GO_VERSION: "1.27.1"
   CI_GOSEC_VERSION: "v2.27.1"
-  CI_GOVULNCHECK_VERSION: "v1.1.4"
+  CI_GOVULNCHECK_VERSION: "v1.8.0"
 
 jobs:
   dependency-review:
@@ -64,20 +64,6 @@ jobs:
           path: msgpack
           persist-credentials: false
 
-      - name: Checkout pbt
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: Quad4-Software/pbt
-          path: pbt
-          persist-credentials: false
-
-      - name: Checkout tagparser
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: Quad4-Software/tagparser
-          path: tagparser
-          persist-credentials: false
-
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -113,20 +99,6 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           path: msgpack
-          persist-credentials: false
-
-      - name: Checkout pbt
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: Quad4-Software/pbt
-          path: pbt
-          persist-credentials: false
-
-      - name: Checkout tagparser
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          repository: Quad4-Software/tagparser
-          path: tagparser
           persist-credentials: false
 
       - name: Set up Go

@@ -3,6 +3,7 @@
 package pbt
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -28,6 +29,7 @@ type CommandModel[S any] struct {
 // StatefulResult is the outcome of a model-based run.
 type StatefulResult[S any] struct {
 	Passed        bool
+	TimedOut      bool
 	ModelName     string
 	Seed          int64
 	ScenarioSeed  int64
@@ -47,7 +49,15 @@ func (r StatefulResult[S]) Error() string {
 	if r.Passed {
 		return ""
 	}
-	return fmt.Sprintf(
+	if len(r.StepSeeds) == 0 {
+		return fmt.Sprintf(
+			"stateful model %q timed out after %d runs budget (seed=%d)",
+			r.ModelName,
+			r.Runs,
+			r.Seed,
+		)
+	}
+	msg := fmt.Sprintf(
 		"stateful model %q failed at scenario=%d step=%d command=%q seed=%d trace=%v",
 		r.ModelName,
 		r.ScenarioIndex,
@@ -56,6 +66,10 @@ func (r StatefulResult[S]) Error() string {
 		r.Seed,
 		r.Trace,
 	)
+	if r.TimedOut {
+		msg += " (timeout during shrinking)"
+	}
+	return msg
 }
 
 // CheckStateful executes a model-based property and fails the test on failure.
@@ -69,6 +83,8 @@ func CheckStateful[S any](t TestingT, model CommandModel[S], opts ...Option) {
 }
 
 // CheckStatefulResult executes command sequences and verifies invariants.
+// Scenarios run sequentially; WithParallelism does not apply to stateful
+// checks, while WithShrinkParallelism controls counterexample shrinking.
 func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulResult[S] {
 	cfg := applyOptions(opts)
 	if cfg.Runs <= 0 {
@@ -76,6 +92,15 @@ func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulR
 	}
 	if cfg.MaxSize <= 0 {
 		panic("pbt: stateful max size must be positive")
+	}
+	if cfg.Timeout < 0 {
+		panic("pbt: stateful timeout must be non-negative")
+	}
+	if cfg.Parallelism <= 0 {
+		panic("pbt: stateful parallelism must be positive")
+	}
+	if cfg.ShrinkParallelism <= 0 {
+		panic("pbt: stateful shrink parallelism must be positive")
 	}
 	if model.Init == nil {
 		panic("pbt: stateful model init cannot be nil")
@@ -86,6 +111,18 @@ func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulR
 	if len(model.Commands) == 0 {
 		panic("pbt: stateful model requires at least one command")
 	}
+	for i, cmd := range model.Commands {
+		if cmd == nil {
+			panic(fmt.Sprintf("pbt: stateful command at index %d cannot be nil", i))
+		}
+	}
+
+	ctx := context.Background()
+	cancel := func() {}
+	if cfg.Timeout > 0 {
+		ctx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+	}
+	defer cancel()
 
 	// #nosec G404 -- deterministic PRNG is required for reproducible model runs.
 	rng := rand.New(rand.NewSource(cfg.Seed))
@@ -108,9 +145,33 @@ func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulR
 	}
 
 	for scenario := 0; scenario < cfg.Runs; scenario++ {
+		if ctx.Err() != nil {
+			out.Passed = false
+			out.TimedOut = true
+			out.ScenarioIndex = scenario
+			dispatcher.runEnd(StatefulRunEndEvent{
+				Passed:   false,
+				TimedOut: true,
+				Elapsed:  time.Since(startedAt),
+			})
+			return out
+		}
+
 		scenarioSeed := rng.Int63()
 		steps := sizeForRun(scenario, cfg.Runs, cfg.MaxSize)
-		run := runStatefulScenario(model, scenarioSeed, steps, scenario, dispatcher)
+		run := runStatefulScenario(ctx, model, scenarioSeed, steps, scenario, dispatcher)
+		if run.TimedOut {
+			out.Passed = false
+			out.TimedOut = true
+			out.ScenarioIndex = scenario
+			out.ScenarioSeed = scenarioSeed
+			dispatcher.runEnd(StatefulRunEndEvent{
+				Passed:   false,
+				TimedOut: true,
+				Elapsed:  time.Since(startedAt),
+			})
+			return out
+		}
 		if run.Passed {
 			continue
 		}
@@ -132,7 +193,10 @@ func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulR
 			FinalState:    run.FinalState,
 		})
 
-		shrunk := shrinkStatefulFailure(model, scenarioSeed, run.StepSeeds, cfg.ShrinkParallelism, dispatcher)
+		shrinkModel := model
+		shrinkModel.Invariant = timeoutAwareInvariant(ctx, model.Invariant)
+		shrunk := shrinkStatefulFailure(ctx, shrinkModel, scenarioSeed, run.StepSeeds, cfg.ShrinkParallelism, dispatcher)
+		out.TimedOut = ctx.Err() != nil
 		if len(shrunk.StepSeeds) > 0 {
 			out.Trace = append([]string(nil), shrunk.Trace...)
 			out.StepSeeds = append([]int64(nil), shrunk.StepSeeds...)
@@ -143,6 +207,7 @@ func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulR
 		}
 		dispatcher.runEnd(StatefulRunEndEvent{
 			Passed:       false,
+			TimedOut:     out.TimedOut,
 			ShrinkPasses: out.ShrinkPasses,
 			Elapsed:      time.Since(startedAt),
 		})
@@ -157,13 +222,33 @@ func CheckStatefulResult[S any](model CommandModel[S], opts ...Option) StatefulR
 	return out
 }
 
-// CommandSequence generates bounded random command sequences.
+// timeoutAwareInvariant reports every state as valid once ctx is done so that
+// shrink candidate evaluation stops promptly instead of running past the
+// timeout. The original failing trace is already recorded, so no
+// counterexample is lost.
+func timeoutAwareInvariant[S any](ctx context.Context, invariant func(state S) bool) func(state S) bool {
+	return func(state S) bool {
+		select {
+		case <-ctx.Done():
+			return true
+		default:
+		}
+		return invariant(state)
+	}
+}
+
+// CommandSequence generates bounded random command sequences. Commands are
+// drawn uniformly without evaluating preconditions, so models must tolerate
+// inapplicable commands in a generated sequence.
 func CommandSequence[S any](name string, minLen int, maxLen int, commands ...StatefulCommand[S]) Generator[[]StatefulCommand[S]] {
 	if minLen < 0 {
 		minLen = 0
 	}
 	if minLen > maxLen {
 		minLen, maxLen = maxLen, minLen
+	}
+	if minLen < 0 {
+		minLen = 0
 	}
 	return NewGenerator(name, func(r *rand.Rand, size int) []StatefulCommand[S] {
 		if len(commands) == 0 {
@@ -200,6 +285,7 @@ func enabledCommands[S any](commands []StatefulCommand[S], state S) []StatefulCo
 
 type statefulRun[S any] struct {
 	Passed        bool
+	TimedOut      bool
 	StepIndex     int
 	FailedCommand string
 	Trace         []string
@@ -208,7 +294,7 @@ type statefulRun[S any] struct {
 	FinalState    S
 }
 
-func runStatefulScenario[S any](model CommandModel[S], scenarioSeed int64, steps int, scenarioIndex int, dispatcher *statefulHookDispatcher[S]) statefulRun[S] {
+func runStatefulScenario[S any](ctx context.Context, model CommandModel[S], scenarioSeed int64, steps int, scenarioIndex int, dispatcher *statefulHookDispatcher[S]) statefulRun[S] {
 	// #nosec G404 -- deterministic PRNG is required for scenario replayability.
 	scenarioRng := rand.New(rand.NewSource(scenarioSeed))
 	state := model.Init(scenarioRng)
@@ -217,6 +303,16 @@ func runStatefulScenario[S any](model CommandModel[S], scenarioSeed int64, steps
 	out := statefulRun[S]{Passed: true}
 
 	for step := range steps {
+		select {
+		case <-ctx.Done():
+			out.TimedOut = true
+			out.Trace = trace
+			out.StepSeeds = stepSeeds
+			out.FinalState = state
+			return out
+		default:
+		}
+
 		enabled := enabledCommands(model.Commands, state)
 		if len(enabled) == 0 {
 			out.Trace = trace
@@ -259,7 +355,7 @@ func runStatefulScenario[S any](model CommandModel[S], scenarioSeed int64, steps
 	return out
 }
 
-func runStatefulWithSeeds[S any](model CommandModel[S], scenarioSeed int64, stepSeeds []int64) statefulRun[S] {
+func runStatefulWithSeeds[S any](ctx context.Context, model CommandModel[S], scenarioSeed int64, stepSeeds []int64) statefulRun[S] {
 	// #nosec G404 -- deterministic PRNG is required for seeded trace replay.
 	scenarioRng := rand.New(rand.NewSource(scenarioSeed))
 	state := model.Init(scenarioRng)
@@ -267,6 +363,16 @@ func runStatefulWithSeeds[S any](model CommandModel[S], scenarioSeed int64, step
 	out := statefulRun[S]{Passed: true}
 
 	for idx, stepSeed := range stepSeeds {
+		select {
+		case <-ctx.Done():
+			out.TimedOut = true
+			out.Trace = trace
+			out.StepSeeds = append([]int64(nil), stepSeeds[:idx]...)
+			out.FinalState = state
+			return out
+		default:
+		}
+
 		enabled := enabledCommands(model.Commands, state)
 		if len(enabled) == 0 {
 			out.Trace = trace
@@ -298,9 +404,9 @@ func runStatefulWithSeeds[S any](model CommandModel[S], scenarioSeed int64, step
 	return out
 }
 
-func shrinkStatefulFailure[S any](model CommandModel[S], scenarioSeed int64, failingSeeds []int64, workers int, dispatcher *statefulHookDispatcher[S]) statefulRun[S] {
+func shrinkStatefulFailure[S any](ctx context.Context, model CommandModel[S], scenarioSeed int64, failingSeeds []int64, workers int, dispatcher *statefulHookDispatcher[S]) statefulRun[S] {
 	current := append([]int64(nil), failingSeeds...)
-	best := runStatefulWithSeeds(model, scenarioSeed, current)
+	best := runStatefulWithSeeds(ctx, model, scenarioSeed, current)
 	if best.Passed {
 		return statefulRun[S]{Passed: true}
 	}
@@ -314,10 +420,14 @@ func shrinkStatefulFailure[S any](model CommandModel[S], scenarioSeed int64, fai
 		progress := true
 		for progress {
 			progress = false
+			if ctx.Err() != nil {
+				best.ShrinkPasses = shrinkPasses
+				return best
+			}
 			if workers == 1 {
 				for i := 0; i+chunk <= len(current); i++ {
 					candidate := removeSeedRange(current, i, i+chunk)
-					run := runStatefulWithSeeds(model, scenarioSeed, candidate)
+					run := runStatefulWithSeeds(ctx, model, scenarioSeed, candidate)
 					if run.Passed {
 						continue
 					}
@@ -345,7 +455,7 @@ func shrinkStatefulFailure[S any](model CommandModel[S], scenarioSeed int64, fai
 			for i := 0; i+chunk <= len(current); i++ {
 				indexes = append(indexes, i)
 			}
-			hit, idx, run := parallelFindFirstFailing(model, scenarioSeed, current, chunk, indexes, workers)
+			hit, idx, run := parallelFindFirstFailing(ctx, model, scenarioSeed, current, chunk, indexes, workers)
 			if hit {
 				current = removeSeedRange(current, idx, idx+chunk)
 				best = run
@@ -371,6 +481,7 @@ func shrinkStatefulFailure[S any](model CommandModel[S], scenarioSeed int64, fai
 }
 
 func parallelFindFirstFailing[S any](
+	ctx context.Context,
 	model CommandModel[S],
 	scenarioSeed int64,
 	current []int64,
@@ -382,9 +493,14 @@ func parallelFindFirstFailing[S any](
 		index int
 		run   statefulRun[S]
 	}
+	type jobPanic struct {
+		index int
+		value any
+	}
 
-	jobs := make(chan int)
+	jobs := make(chan int, len(indexes))
 	results := make(chan candidate, len(indexes))
+	panics := make(chan jobPanic, workers)
 	var wg sync.WaitGroup
 
 	if workers > len(indexes) {
@@ -393,10 +509,24 @@ func parallelFindFirstFailing[S any](
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
+			panicIndex := -1
 			defer wg.Done()
+			// A panic in a worker goroutine would otherwise crash the whole
+			// process. Capture it and let the caller re-raise it below.
+			defer func() {
+				if r := recover(); r != nil {
+					panics <- jobPanic{index: panicIndex, value: r}
+				}
+			}()
 			for idx := range jobs {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				panicIndex = idx
 				candidateSeeds := removeSeedRange(current, idx, idx+chunk)
-				run := runStatefulWithSeeds(model, scenarioSeed, candidateSeeds)
+				run := runStatefulWithSeeds(ctx, model, scenarioSeed, candidateSeeds)
 				if run.Passed {
 					continue
 				}
@@ -411,6 +541,20 @@ func parallelFindFirstFailing[S any](
 	close(jobs)
 	wg.Wait()
 	close(results)
+	close(panics)
+
+	// Re-raise the panic from the lowest index so the failure is deterministic
+	// across repeated runs.
+	var recovered *jobPanic
+	for p := range panics {
+		if recovered == nil || p.index < recovered.index {
+			captured := p
+			recovered = &captured
+		}
+	}
+	if recovered != nil {
+		panic(recovered.value)
+	}
 
 	found := false
 	bestIdx := 0

@@ -133,6 +133,19 @@ func SuchThatFallback[T any](name string, source Generator[T], predicate Predica
 	})
 }
 
+// FlatMap builds a generator whose output depends on a value produced by an
+// earlier generator. This is the bind operation: it enables correlated
+// structures such as generating a length and then a slice of exactly that
+// length. Automatic shrinking cannot cross the bind because the inner
+// generator is only known after the first value is drawn, so supply
+// WithShrinker when minimized counterexamples matter.
+func FlatMap[A any, B any](name string, source Generator[A], fn func(A) Generator[B]) Generator[B] {
+	return NewGenerator(name, func(r *rand.Rand, size int) B {
+		a := source.Generate(r, size)
+		return fn(a).Generate(r, size)
+	})
+}
+
 // Recursive builds recursive generators with a bounded depth.
 func Recursive[T any](name string, base Generator[T], combine func(self Generator[T]) Generator[T], maxDepth int) Generator[T] {
 	if maxDepth <= 0 {

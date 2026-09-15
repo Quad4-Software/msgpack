@@ -159,7 +159,7 @@
 
 ### Dependencies
 
-- `github.com/Quad4-Software/tagparser/v2` **v2.1.0** ([Quad4 fork](https://github.com/Quad4-Software/tagparser)) replaces `github.com/vmihailenco/tagparser/v2` for struct tag parsing in `pkg/msgpack/types.go`; import path `.../pkg/tagparser`. The same change is reflected in the `extra/msgpappengine` submodule.
+- `github.com/Quad4-Software/tagparser/v2` **v2.1.0** ([Quad4 fork](https://github.com/Quad4-Software/tagparser/v2)) replaces `github.com/vmihailenco/tagparser/v2` for struct tag parsing in `pkg/msgpack/types.go`; import path `.../pkg/tagparser`. The same change is reflected in the `extra/msgpappengine` submodule.
 
 ### Security and correctness
 

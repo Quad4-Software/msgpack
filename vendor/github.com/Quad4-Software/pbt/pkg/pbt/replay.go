@@ -55,7 +55,9 @@ func (r Result[T]) ToReplayFixture() (ReplayFixture, error) {
 	}, nil
 }
 
-// WriteReplayFixture writes a fixture JSON file to disk.
+// WriteReplayFixture writes a fixture JSON file to disk. String fields are
+// stored as JSON text, so invalid UTF-8 byte sequences are replaced with
+// U+FFFD on write.
 func WriteReplayFixture(path string, fixture ReplayFixture) error {
 	data, err := json.MarshalIndent(fixture, "", "  ")
 	if err != nil {

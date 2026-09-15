@@ -29,6 +29,9 @@ func AnalyzeDistribution[T any](
 	seed int64,
 	maxSize int,
 ) DistributionReport {
+	if generator == nil {
+		panic("pbt: AnalyzeDistribution generator cannot be nil")
+	}
 	if runs <= 0 {
 		panic("pbt: AnalyzeDistribution runs must be positive")
 	}
