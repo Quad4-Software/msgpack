@@ -1,0 +1,523 @@
+package msgpack_test
+
+import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"math"
+	"testing"
+	"time"
+
+	"github.com/Quad4-Software/msgpack/v5/pkg/msgpack"
+)
+
+func BenchmarkDiscard(b *testing.B) {
+	enc := msgpack.NewEncoder(ioutil.Discard)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if err := enc.Encode(nil); err != nil {
+			b.Fatal(err)
+		}
+		if err := enc.Encode("hello"); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkEncodeDecode(b *testing.B, src, dst any) {
+	var buf bytes.Buffer
+	enc := msgpack.NewEncoder(&buf)
+	dec := msgpack.NewDecoder(&buf)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if err := enc.Encode(src); err != nil {
+			b.Fatal(err)
+		}
+		if err := dec.Decode(dst); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func benchmarkJSONEncodeDecode(b *testing.B, src, dst any) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	dec := json.NewDecoder(&buf)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		if err := enc.Encode(src); err != nil {
+			b.Fatal(err)
+		}
+		if err := dec.Decode(dst); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkBool(b *testing.B) {
+	var dst bool
+	benchmarkEncodeDecode(b, true, &dst)
+}
+
+func BenchmarkInt0(b *testing.B) {
+	var dst int
+	benchmarkEncodeDecode(b, 1, &dst)
+}
+
+func BenchmarkInt1(b *testing.B) {
+	var dst int
+	benchmarkEncodeDecode(b, -33, &dst)
+}
+
+func BenchmarkInt2(b *testing.B) {
+	var dst int
+	benchmarkEncodeDecode(b, 128, &dst)
+}
+
+func BenchmarkInt4(b *testing.B) {
+	var dst int
+	benchmarkEncodeDecode(b, 32768, &dst)
+}
+
+func BenchmarkInt8(b *testing.B) {
+	var dst int
+	benchmarkEncodeDecode(b, int64(2147483648), &dst)
+}
+
+func BenchmarkInt32(b *testing.B) {
+	var dst int32
+	benchmarkEncodeDecode(b, int32(0), &dst)
+}
+
+func BenchmarkFloat32(b *testing.B) {
+	var dst float32
+	benchmarkEncodeDecode(b, float32(0), &dst)
+}
+
+func BenchmarkFloat32_Max(b *testing.B) {
+	var dst float32
+	benchmarkEncodeDecode(b, float32(math.MaxFloat32), &dst)
+}
+
+func BenchmarkFloat64(b *testing.B) {
+	var dst float64
+	benchmarkEncodeDecode(b, float64(0), &dst)
+}
+
+func BenchmarkFloat64_Max(b *testing.B) {
+	var dst float64
+	benchmarkEncodeDecode(b, float64(math.MaxFloat64), &dst)
+}
+
+func BenchmarkTime(b *testing.B) {
+	var dst time.Time
+	benchmarkEncodeDecode(b, time.Now(), &dst)
+}
+
+func BenchmarkDuration(b *testing.B) {
+	var dst time.Duration
+	benchmarkEncodeDecode(b, time.Hour, &dst)
+}
+
+func BenchmarkByteSlice(b *testing.B) {
+	src := make([]byte, 1024)
+	var dst []byte
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkByteArray(b *testing.B) {
+	var src [1024]byte
+	var dst [1024]byte
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkByteArrayPtr(b *testing.B) {
+	var src [1024]byte
+	var dst [1024]byte
+	benchmarkEncodeDecode(b, &src, &dst)
+}
+
+func BenchmarkMapStringString(b *testing.B) {
+	src := map[string]string{
+		"hello": "world",
+		"foo":   "bar",
+	}
+	var dst map[string]string
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkMapStringStringPtr(b *testing.B) {
+	src := map[string]string{
+		"hello": "world",
+		"foo":   "bar",
+	}
+	dst := new(map[string]string)
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkMapStringInterfaceMsgpack(b *testing.B) {
+	src := map[string]any{
+		"hello": "world",
+		"foo":   "bar",
+		"one":   1111111,
+		"two":   2222222,
+	}
+	var dst map[string]any
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkMapStringInterfaceJSON(b *testing.B) {
+	src := map[string]any{
+		"hello": "world",
+		"foo":   "bar",
+		"one":   1111111,
+		"two":   2222222,
+	}
+	var dst map[string]any
+	benchmarkJSONEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkMapIntInt(b *testing.B) {
+	src := map[int]int{
+		1: 10,
+		2: 20,
+	}
+	var dst map[int]int
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkStringSlice(b *testing.B) {
+	src := []string{"hello", "world"}
+	var dst []string
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+func BenchmarkStringSlicePtr(b *testing.B) {
+	src := []string{"hello", "world"}
+	var dst []string
+	dstptr := &dst
+	benchmarkEncodeDecode(b, src, &dstptr)
+}
+
+type benchmarkStruct struct {
+	Name      string
+	Age       int
+	Colors    []string
+	Data      []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+type benchmarkStruct2 struct {
+	Name      string
+	Age       int
+	Colors    []string
+	Data      []byte
+	CreatedAt time.Time
+	UpdatedAt time.Time
+}
+
+var (
+	_ msgpack.CustomEncoder = (*benchmarkStruct2)(nil)
+	_ msgpack.CustomDecoder = (*benchmarkStruct2)(nil)
+)
+
+func (s *benchmarkStruct2) EncodeMsgpack(enc *msgpack.Encoder) error {
+	return enc.EncodeMulti(
+		s.Name,
+		s.Colors,
+		s.Age,
+		s.Data,
+		s.CreatedAt,
+		s.UpdatedAt,
+	)
+}
+
+func (s *benchmarkStruct2) DecodeMsgpack(dec *msgpack.Decoder) error {
+	return dec.DecodeMulti(
+		&s.Name,
+		&s.Colors,
+		&s.Age,
+		&s.Data,
+		&s.CreatedAt,
+		&s.UpdatedAt,
+	)
+}
+
+func structForBenchmark() *benchmarkStruct {
+	return &benchmarkStruct{
+		Name:      "Hello World",
+		Colors:    []string{"red", "orange", "yellow", "green", "blue", "violet"},
+		Age:       math.MaxInt32,
+		Data:      make([]byte, 1024),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+}
+
+func structForBenchmark2() *benchmarkStruct2 {
+	return &benchmarkStruct2{
+		Name:      "Hello World",
+		Colors:    []string{"red", "orange", "yellow", "green", "blue", "violet"},
+		Age:       math.MaxInt32,
+		Data:      make([]byte, 1024),
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+}
+
+func BenchmarkStructVmihailencoMsgpack(b *testing.B) {
+	in := structForBenchmark()
+	out := new(benchmarkStruct)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		buf, err := msgpack.Marshal(in)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		err = msgpack.Unmarshal(buf, out)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStructMarshal(b *testing.B) {
+	in := structForBenchmark()
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := msgpack.Marshal(in)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStructUnmarshal(b *testing.B) {
+	in := structForBenchmark()
+	buf, err := msgpack.Marshal(in)
+	if err != nil {
+		b.Fatal(err)
+	}
+	out := new(benchmarkStruct)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err = msgpack.Unmarshal(buf, out)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkStructManual(b *testing.B) {
+	in := structForBenchmark2()
+	out := new(benchmarkStruct2)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		buf, err := msgpack.Marshal(in)
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		err = msgpack.Unmarshal(buf, out)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+type benchmarkStructPartially struct {
+	Name string
+	Age  int
+}
+
+func BenchmarkStructUnmarshalPartially(b *testing.B) {
+	in := structForBenchmark()
+	buf, err := msgpack.Marshal(in)
+	if err != nil {
+		b.Fatal(err)
+	}
+	out := new(benchmarkStructPartially)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		err = msgpack.Unmarshal(buf, out)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkMarshalParallel exercises the package-level encoder pool from
+// many goroutines. It shows the per-call cost when the pool is hot.
+func BenchmarkMarshalParallel(b *testing.B) {
+	src := structForBenchmark()
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			if _, err := msgpack.Marshal(src); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// BenchmarkUnmarshalParallel exercises the package-level decoder pool and
+// the pooled bytes.Reader from many goroutines.
+func BenchmarkUnmarshalParallel(b *testing.B) {
+	src := structForBenchmark()
+	data, err := msgpack.Marshal(src)
+	if err != nil {
+		b.Fatal(err)
+	}
+	b.ResetTimer()
+	b.RunParallel(func(pb *testing.PB) {
+		var out benchmarkStruct
+		for pb.Next() {
+			if err := msgpack.Unmarshal(data, &out); err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+}
+
+// BenchmarkLargeByteSlice round-trips a 64 KiB byte slice. The cost is
+// dominated by the bin32 length prefix path and the destination allocation.
+func BenchmarkLargeByteSlice(b *testing.B) {
+	src := make([]byte, 1<<16)
+	for i := range src {
+		src[i] = byte(i)
+	}
+	var dst []byte
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+// BenchmarkLargeString round-trips a 64 KiB string through the str32 path.
+func BenchmarkLargeString(b *testing.B) {
+	buf := make([]byte, 1<<16)
+	for i := range buf {
+		buf[i] = byte('a' + (i % 26))
+	}
+	src := string(buf)
+	var dst string
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+// BenchmarkNestedMap measures the recursive map encoder and decoder on a
+// 5-level deep structure of map[string]any values.
+func BenchmarkNestedMap(b *testing.B) {
+	var leaf any = "leaf"
+	for range 5 {
+		leaf = map[string]any{"k": leaf}
+	}
+	src := leaf.(map[string]any)
+	var dst map[string]any
+	benchmarkEncodeDecode(b, src, &dst)
+}
+
+// BenchmarkStructMarshalReuse measures Marshal-only cost for a typical
+// struct using the package-level encoder pool.
+func BenchmarkStructMarshalReuse(b *testing.B) {
+	src := structForBenchmark()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := msgpack.Marshal(src); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkStructAppendMarshalReuse measures Marshal-only cost when callers
+// provide a reusable destination buffer to avoid output allocations.
+func BenchmarkStructAppendMarshalReuse(b *testing.B) {
+	src := structForBenchmark()
+	dst := make([]byte, 0, 2048)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var err error
+		dst, err = msgpack.AppendMarshal(dst, src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkStructEncoderAppendReuse removes pool get/put overhead and isolates
+// struct-encoding allocations while reusing destination storage.
+func BenchmarkStructEncoderAppendReuse(b *testing.B) {
+	src := structForBenchmark()
+	enc := msgpack.NewEncoder(nil)
+	dst := make([]byte, 0, 2048)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var err error
+		dst, err = enc.Append(dst, src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+// BenchmarkIntEncoderAppendReuse measures the lowest-allocation scalar path
+// by reusing both the encoder instance and destination buffer.
+func BenchmarkIntEncoderAppendReuse(b *testing.B) {
+	enc := msgpack.NewEncoder(nil)
+	dst := make([]byte, 0, 64)
+	const src int64 = 42
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var err error
+		dst, err = enc.Append(dst, src)
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
+func BenchmarkQuery(b *testing.B) {
+	var records []map[string]any
+	for i := range 1000 {
+		record := map[string]any{
+			"id":    int64(i),
+			"attrs": map[string]any{"phone": int64(i)},
+		}
+		records = append(records, record)
+	}
+
+	bs, err := msgpack.Marshal(records)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	dec := msgpack.NewDecoder(bytes.NewBuffer(bs))
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		dec.Reset(bytes.NewBuffer(bs))
+
+		values, err := dec.Query("10.attrs.phone")
+		if err != nil {
+			b.Fatal(err)
+		}
+		if values[0].(int64) != 10 {
+			b.Fatalf("%v != %d", values[0], 10)
+		}
+	}
+}

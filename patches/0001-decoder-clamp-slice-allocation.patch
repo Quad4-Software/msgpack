@@ -1,0 +1,90 @@
+Subject: [PATCH 1/7] decoder: clamp slice allocation against forged array length
+
+The decodeSlice fast path (msgpack.Decoder.DecodeSlice and the
+[]interface{} branch of decodeInterface) called
+
+    s := make([]interface{}, 0, n)
+
+with n taken directly from the wire-format array16 / array32 length.
+A hostile or truncated header (for example, array32 with length
+0xFFFFFFFF) caused a multi-gigabyte up-front allocation before the
+underlying short input failed, easily DoS-ing any service that
+unmarshals untrusted MessagePack.
+
+decodeSliceValue had a related bug: the test
+
+    noLimit := d.flags&disableAllocLimitFlag != 1
+
+was a literal comparison against 1, but disableAllocLimitFlag is
+1 << 1 == 2. The result is that limits were never applied along the
+reflective slice path either.
+
+This patch:
+
+  * Clamps the initial backing-array capacity in decodeSlice to
+    sliceAllocLimit unless the caller has explicitly opted out via
+    Decoder.DisableAllocLimit(true). Append still grows the slice as
+    real elements arrive, so well-formed input round-trips correctly.
+
+  * Replaces the literal-1 test in decodeSliceValue with a proper bit
+    test, and lets growSliceValue cap each grow step. Hostile lengths
+    can no longer skip the limit; well-formed input continues to grow
+    as before.
+
+Backwards compatible: same exported API, same wire format, same
+results for non-pathological input.
+
+Apply from the package root:
+
+    patch -p1 < 0001-decoder-clamp-slice-allocation.patch
+
+---
+ decode_slice.go | 22 ++++++++++++++++++----
+ 1 file changed, 18 insertions(+), 4 deletions(-)
+
+--- a/decode_slice.go
++++ b/decode_slice.go
+@@ -101,14 +101,20 @@
+ 		v.Set(v.Slice(0, v.Cap()))
+ 	}
+ 
+-	noLimit := d.flags&disableAllocLimitFlag != 1
++	// disableAllocLimitFlag is a bit flag (1 << 1 == 2); the previous
++	// comparison against the literal 1 meant the limit was effectively
++	// never applied along this path and a hostile array32 length could
++	// trick the decoder into requesting a multi-gigabyte slice up front.
++	// Use a bit test and let growSliceValue cap each grow step so real
++	// elements still flow through as input arrives.
++	noLimit := d.flags&disableAllocLimitFlag != 0
+ 
+ 	if noLimit && n > v.Len() {
+ 		v.Set(growSliceValue(v, n, noLimit))
+ 	}
+ 
+ 	for i := 0; i < n; i++ {
+-		if !noLimit && i >= v.Len() {
++		if i >= v.Len() {
+ 			v.Set(growSliceValue(v, n, noLimit))
+ 		}
+ 
+@@ -170,7 +176,19 @@
+ 		return nil, nil
+ 	}
+ 
+-	s := make([]interface{}, 0, n)
++	// Clamp the initial backing-array allocation so a hostile or
++	// truncated header (for example, array32 with length ~4G) cannot
++	// trick the decoder into requesting an arbitrarily large slice up
++	// front. The decoder still grows the slice via append as real
++	// elements arrive, so well-formed input with more than
++	// sliceAllocLimit elements continues to round-trip correctly when
++	// the limit is disabled via Decoder.DisableAllocLimit(true).
++	initCap := n
++	if d.flags&disableAllocLimitFlag == 0 && initCap > sliceAllocLimit {
++		initCap = sliceAllocLimit
++	}
++
++	s := make([]interface{}, 0, initCap)
+ 	for i := 0; i < n; i++ {
+ 		v, err := d.decodeInterfaceCond()
+ 		if err != nil {

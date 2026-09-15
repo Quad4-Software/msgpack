@@ -1,0 +1,341 @@
+name: CI
+
+on:
+  push:
+    branches: [v5, master, main]
+  pull_request:
+    branches: [v5, master, main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GOTOOLCHAIN: local
+  GOWORK: "off"
+
+jobs:
+  test:
+    name: test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-go1.27.1-race
+            os: ubuntu-latest
+            go: "1.27.1"
+            race: true
+          - name: macos-go1.27.1
+            os: macos-latest
+            go: "1.27.1"
+            race: false
+          - name: windows-go1.27.1
+            os: windows-latest
+            go: "1.27.1"
+            race: false
+          - name: linux-386-go1.27.1
+            os: ubuntu-latest
+            go: "1.27.1"
+            goarch: "386"
+            race: false
+
+    defaults:
+      run:
+        working-directory: msgpack
+
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Checkout msgpack
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: Environment
+        shell: bash
+        env:
+          MATRIX_GOARCH: ${{ matrix.goarch }}
+        run: |
+          if [ -n "$MATRIX_GOARCH" ]; then
+            echo "GOARCH=${MATRIX_GOARCH}" >> "$GITHUB_ENV"
+          fi
+          go env
+          go version
+
+      - name: Vet
+        shell: bash
+        run: go vet ./...
+
+      - name: Test
+        shell: bash
+        run: go test -count=1 ./...
+
+      - name: Test race
+        if: matrix.race
+        shell: bash
+        run: go test -count=1 -race ./...
+
+      - name: Build
+        shell: bash
+        run: go build ./...
+
+  fuzz-smoke:
+    name: fuzz-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: test
+    defaults:
+      run:
+        working-directory: msgpack
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Checkout msgpack
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: Fuzz oversized containers
+        run: go test ./pkg/msgpack/ -fuzz=FuzzDecodeOversizedContainers -fuzztime=15s -count=1
+
+      - name: Fuzz unmarshal arbitrary
+        run: go test ./pkg/msgpack/ -fuzz=FuzzUnmarshalArbitrary -fuzztime=15s -count=1
+
+      - name: Fuzz length headers
+        run: go test ./pkg/msgpack/ -fuzz=FuzzDecodeLengthHeaders -fuzztime=10s -count=1
+
+      - name: Fuzz skip
+        run: go test ./pkg/msgpack/ -fuzz=FuzzDecodeSkip -fuzztime=10s -count=1
+
+  lint:
+    name: lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: msgpack
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+      - name: Checkout msgpack
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: gofmt
+        shell: bash
+        run: |
+          unformatted="$(gofmt -l pkg extra)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed on:" >&2
+            echo "$unformatted" >&2
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.12.2
+          working-directory: msgpack
+          args: --timeout=5m
+          install-mode: goinstall
+
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COVERAGE_MIN: "80"
+    defaults:
+      run:
+        working-directory: msgpack
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout msgpack
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: Test with coverage
+        run: go test -count=1 -coverpkg=./... -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Coverage gate
+        shell: bash
+        run: |
+          total="$(go tool cover -func=coverage.out | awk '/^total:/ {gsub("%","",$3); print $3}')"
+          echo "total coverage: ${total}%"
+          awk -v t="$total" -v min="$COVERAGE_MIN" 'BEGIN { exit (t + 0 < min + 0) }'
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage
+          path: msgpack/coverage.out
+          if-no-files-found: ignore
+          retention-days: 14
+
+  bench:
+    name: bench-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: msgpack
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout msgpack
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: msgpack
+          persist-credentials: false
+
+      - name: Checkout pbt
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Quad4-Software/pbt
+          path: pbt
+          persist-credentials: false
+
+      - name: Checkout tagparser
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: Quad4-Software/tagparser
+          path: tagparser
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.27.1"
+          cache-dependency-path: |
+            msgpack/go.mod
+            msgpack/go.sum
+            pbt/go.mod
+            tagparser/go.mod
+
+      - name: Benchmarks
+        run: go test -run=^$ -bench=. -benchtime=100ms -count=1 ./pkg/msgpack

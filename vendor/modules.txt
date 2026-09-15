@@ -1,0 +1,10 @@
+# github.com/Quad4-Software/pbt v0.0.0 => ../pbt
+## explicit; go 1.27.1
+github.com/Quad4-Software/pbt/pkg/pbt
+# github.com/Quad4-Software/tagparser v0.0.0 => ../tagparser
+## explicit; go 1.27.1
+github.com/Quad4-Software/tagparser/internal
+github.com/Quad4-Software/tagparser/internal/parser
+github.com/Quad4-Software/tagparser/pkg/tagparser
+# github.com/Quad4-Software/pbt => ../pbt
+# github.com/Quad4-Software/tagparser => ../tagparser

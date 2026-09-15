@@ -1,0 +1,95 @@
+Subject: [PATCH 6/7] encoder: zero-alloc byteWriter scratch + pre-grow Marshal buffer
+
+Two small encoder allocations show up on every Marshal hot path:
+
+  1. byteWriter.WriteByte allocated a fresh one-byte slice on every
+     call:
+
+         _, err := bw.Write([]byte{c})
+
+     That is one heap allocation per opcode/header byte for any
+     io.Writer that does not implement io.ByteWriter. Encoding a
+     small struct produced dozens of one-byte allocations for nothing.
+
+  2. Marshal created a bytes.Buffer with zero capacity and let it
+     double from 8 -> 16 -> 32 -> 64 ... for every payload. Most
+     msgpack values (numbers, short strings, small structs) are well
+     under 64 bytes, so the first one or two doublings were pure
+     waste and an extra alloc per Marshal call.
+
+This patch:
+
+  * Stores a [1]byte scratch buffer on byteWriter and writes it via
+    a sub-slice, so WriteByte no longer escapes to the heap. The
+    wrapper is now a *byteWriter (one tiny alloc per Encoder.Reset
+    instead of one per WriteByte). Concurrency is unchanged because
+    each Encoder owns its own writer.
+
+  * Pre-grows the Marshal buffer to 64 bytes so the first few
+    doublings are skipped for the common small-payload case without
+    over-allocating for large payloads.
+
+No exported API or wire-format change. Output bytes are identical.
+Microbenchmarks show fewer allocations per Marshal across small,
+medium, and nested payloads.
+
+Apply from the package root:
+
+    patch -p1 < 0006-encoder-zero-alloc-byte-writer-and-pregrow-marshal.patch
+
+---
+ encode.go | 26 +++++++++++++++++++++-----
+ 1 file changed, 21 insertions(+), 5 deletions(-)
+
+--- a/encode.go
++++ b/encode.go
+@@ -24,18 +24,23 @@
+ 	WriteByte(byte) error
+ }
+ 
++// byteWriter adapts an io.Writer that does not implement io.ByteWriter.
++//
++// The single-byte buffer is kept on the wrapper so WriteByte does not
++// allocate a fresh one-byte slice on every call. Wrappers are created
++// per Encoder.Reset, so there is no concurrency concern.
+ type byteWriter struct {
+ 	io.Writer
++	scratch [1]byte
+ }
+ 
+-func newByteWriter(w io.Writer) byteWriter {
+-	return byteWriter{
+-		Writer: w,
+-	}
++func newByteWriter(w io.Writer) *byteWriter {
++	return &byteWriter{Writer: w}
+ }
+ 
+-func (bw byteWriter) WriteByte(c byte) error {
+-	_, err := bw.Write([]byte{c})
++func (bw *byteWriter) WriteByte(c byte) error {
++	bw.scratch[0] = c
++	_, err := bw.Write(bw.scratch[:])
+ 	return err
+ }
+ 
+@@ -56,11 +61,19 @@
+ 	encPool.Put(enc)
+ }
+ 
++// marshalInitialBufSize is the initial backing capacity reserved by Marshal.
++//
++// Pre-growing avoids the first one or two doublings (8/16/32/64) for the
++// majority of small payloads (numbers, short strings, small structs)
++// without over-allocating for callers that encode large values.
++const marshalInitialBufSize = 64
++
+ // Marshal returns the MessagePack encoding of v.
+ func Marshal(v interface{}) ([]byte, error) {
+ 	enc := GetEncoder()
+ 
+ 	var buf bytes.Buffer
++	buf.Grow(marshalInitialBufSize)
+ 	enc.Reset(&buf)
+ 
+ 	err := enc.Encode(v)
