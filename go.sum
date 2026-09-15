@@ -1,4 +1,4 @@
-github.com/Quad4-Software/pbt v1.0.0 h1:TkbCL5b0kENJawhImotJlYJh0yiSVrJj1a86RDFBZLw=
-github.com/Quad4-Software/pbt v1.0.0/go.mod h1:LT0wImA1rUlv1IcuPHf3rrDBa5WwDi5nHAPupxi7a84=
-github.com/Quad4-Software/tagparser/v2 v2.2.0 h1:LXYExgSdMD3TBZrCJgJ6nlRDe5WxOIOUqTdLePl87ds=
-github.com/Quad4-Software/tagparser/v2 v2.2.0/go.mod h1:Hz5g/DjjMFK86WfT/60bAUwOxsM3urTmxYn9nZtjPWg=
+github.com/Quad4-Software/pbt v1.0.1 h1:FbZ/pmT39D28GM2v/6HNb7TAApoeveqgO8yFBsa6ltc=
+github.com/Quad4-Software/pbt v1.0.1/go.mod h1:LT0wImA1rUlv1IcuPHf3rrDBa5WwDi5nHAPupxi7a84=
+github.com/Quad4-Software/tagparser/v2 v2.2.1 h1:kzqn0lCINb4H3ysLJoCoOE36jEW4OVGGMayTJF/z7MM=
+github.com/Quad4-Software/tagparser/v2 v2.2.1/go.mod h1:WbIheb6QbJCsk0E0LcWFfndPs4I+Ws/GPNG21lhE5Kw=
