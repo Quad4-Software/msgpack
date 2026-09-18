@@ -1,3 +1,16 @@
+## [5.8.3](https://github.com/Quad4-Software/msgpack) (2026-09-19)
+
+### Security hardening
+
+- Fix panic on unhashable map keys in map decoders (`pkg/msgpack/decode_map.go`):
+  - `DecodeUntypedMap` and the typed map decode path now reject non-comparable key types with a decode error instead of panicking on `map[any]any` assignment or `reflect.SetMapIndex`
+  - Keys decoded as `[]byte` (bin/str byte payloads) are converted to `string`, matching how Python msgpack accepts bytes keys and how the typed `map[string]any` path already behaves
+  - Reachable from Reticulum-Go wire paths: a 4-byte msgpack payload like `{[1]: 2}` previously crashed the process with `panic: hash of unhashable type []interface {}`
+
+### Tests
+
+- Regression coverage for unhashable array and map keys on both untyped and typed decode paths
+
 ## [5.8.2](https://github.com/Quad4-Software/msgpack) (2026-07-17)
 
 ### Security hardening
